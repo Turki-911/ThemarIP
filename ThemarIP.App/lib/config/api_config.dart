@@ -45,6 +45,10 @@ class ApiConfig {
       return _customHost!;
     }
     if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host.isNotEmpty && host != 'localhost' && host != '127.0.0.1') {
+        return livePublicApiUrl;
+      }
       return 'localhost';
     }
     // Android emulator routes to host via 10.0.2.2

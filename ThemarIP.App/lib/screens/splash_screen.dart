@@ -163,6 +163,12 @@ class _SplashScreenState extends State<SplashScreen> {
               runSpacing: 6,
               children: [
                 ActionChip(
+                  label: const Text('🌐 Live Cloud (HTTPS)'),
+                  backgroundColor: AppTheme.neonPink.withValues(alpha: 0.2),
+                  labelStyle: const TextStyle(fontSize: 11, color: AppTheme.neonPink, fontWeight: FontWeight.bold),
+                  onPressed: () => controller.text = ApiConfig.livePublicApiUrl,
+                ),
+                ActionChip(
                   label: const Text('172.20.10.5 (Mac)'),
                   backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.2),
                   labelStyle: const TextStyle(fontSize: 11, color: AppTheme.primaryPurple, fontWeight: FontWeight.w600),

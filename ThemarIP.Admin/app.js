@@ -916,6 +916,8 @@ const Dashboard = {
   renderKPIs() {
     const s = Dashboard.getStats();
     const el = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+    const usersCount = (Users._users && Users._users.length) ? Users._users.length : 1;
+    el('kpi-total-users',         Utils.fmt.number(usersCount));
     el('kpi-total-txn',           Utils.fmt.number(s.total));
     el('kpi-categorized',         Utils.fmt.number(s.categorized));
     el('kpi-uncategorized',       Utils.fmt.number(s.uncategorized));
@@ -926,6 +928,12 @@ const Dashboard = {
 
     const pctEl = document.getElementById('kpi-categorized-pct');
     if (pctEl) pctEl.innerHTML = `<i data-lucide="trending-up"></i> ${s.categorizedPct}% of total`;
+    const usersTrendEl = document.getElementById('kpi-users-trend');
+    if (usersTrendEl && Users._users && Users._users.length) {
+      const admins = Users._users.filter(u => (u.role || '').toLowerCase() === 'admin' || (u.email || '').toLowerCase() === 'admin@themar.ip').length;
+      const regular = usersCount - admins;
+      usersTrendEl.textContent = `${admins} Admin${admins === 1 ? '' : 's'}${regular > 0 ? `, ${regular} App User${regular === 1 ? '' : 's'}` : ' (Only Admin)'}`;
+    }
     refreshIcons();
   },
 
@@ -2290,8 +2298,17 @@ const Users = {
       const res = await fetch(THEMAR_API_BASE + '/statements/users');
       if (res.ok) {
         this._users = await res.json();
+        const count = this._users.length;
         const badge = document.getElementById('nav-users-count');
-        if (badge) badge.textContent = this._users.length;
+        if (badge) badge.textContent = count;
+        const kpi = document.getElementById('kpi-total-users');
+        if (kpi) kpi.textContent = count;
+        const trend = document.getElementById('kpi-users-trend');
+        if (trend) {
+          const admins = this._users.filter(u => (u.role || '').toLowerCase() === 'admin' || (u.email || '').toLowerCase() === 'admin@themar.ip').length;
+          const regular = count - admins;
+          trend.textContent = `${admins} Admin${admins === 1 ? '' : 's'}${regular > 0 ? `, ${regular} App User${regular === 1 ? '' : 's'}` : ' (Only Admin)'}`;
+        }
       }
     } catch (e) {
       console.error('Failed to load users:', e);
@@ -2309,6 +2326,7 @@ const Users = {
     }
 
     tbody.innerHTML = this._users.map(u => {
+      const isAdmin = (u.role || '').toLowerCase() === 'admin' || (u.email || '').toLowerCase() === 'admin@themar.ip';
       const isApproved = (u.accessStatus || '').toLowerCase() === 'approved';
       const isRejected = (u.accessStatus || '').toLowerCase() === 'rejected';
       const statusColor = isApproved ? 'var(--accent-emerald, #10B981)' : (isRejected ? 'var(--accent-rose, #F43F5E)' : 'var(--accent-amber, #F59E0B)');
@@ -2318,7 +2336,7 @@ const Users = {
         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
           <td style="padding:14px 16px;">
             <div style="display:flex;align-items:center;gap:10px;">
-              <div style="width:32px;height:32px;border-radius:50%;background:rgba(124,58,237,0.15);color:#A78BFA;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:${isAdmin ? 'rgba(16,185,129,0.2)' : 'rgba(124,58,237,0.15)'};color:${isAdmin ? '#10B981' : '#A78BFA'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">
                 ${(u.fullName || u.email || 'U')[0].toUpperCase()}
               </div>
               <div>
@@ -2329,7 +2347,11 @@ const Users = {
           </td>
           <td style="padding:14px 16px;color:var(--text-muted);font-size:13px;">${u.email}</td>
           <td style="padding:14px 16px;font-family:monospace;font-size:12px;color:var(--accent-cyan,#06B6D4);">${u.accountNumber || '—'}</td>
-          <td style="padding:14px 16px;"><span class="badge" style="background:rgba(255,255,255,0.06);font-size:11px;">${u.role}</span></td>
+          <td style="padding:14px 16px;">
+            <span class="badge" style="background:${isAdmin ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)'};color:${isAdmin ? '#10B981' : 'inherit'};font-weight:${isAdmin ? '700' : '500'};font-size:11px;">
+              ${u.role}
+            </span>
+          </td>
           <td style="padding:14px 16px;">
             <span class="badge" style="background:${statusColor}22;color:${statusColor};font-weight:600;font-size:11px;">
               ${u.accessStatus}
@@ -2338,9 +2360,18 @@ const Users = {
           <td style="padding:14px 16px;font-weight:600;color:var(--text-muted);">${u.trustScore || 0}</td>
           <td style="padding:14px 16px;color:var(--text-dim);font-size:12px;">${dateStr}</td>
           <td style="padding:14px 16px;text-align:right;">
-            <button class="btn btn-xs ${isApproved ? 'btn-secondary' : 'btn-primary'} toggle-user-status-btn" data-user-id="${u.id}" data-current-status="${u.accessStatus}">
-              ${isApproved ? 'Revoke' : 'Approve'}
-            </button>
+            ${isAdmin ? `
+              <span class="badge" style="background:rgba(16,185,129,0.12);color:#10B981;font-size:11px;padding:4px 8px;">System Admin</span>
+            ` : `
+              <div style="display:inline-flex;gap:6px;">
+                <button class="btn btn-xs ${isApproved ? 'btn-secondary' : 'btn-primary'} toggle-user-status-btn" data-user-id="${u.id}" data-current-status="${u.accessStatus}">
+                  ${isApproved ? 'Revoke' : 'Approve'}
+                </button>
+                <button class="btn btn-xs delete-user-btn" data-user-id="${u.id}" data-user-email="${u.email}" style="background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.3);">
+                  <i data-lucide="trash-2"></i> Delete
+                </button>
+              </div>
+            `}
           </td>
         </tr>
       `;
@@ -2364,10 +2395,35 @@ const Users = {
           });
           if (res.ok) {
             Toast.success(`User access updated to ${newStatus}.`);
-            Users.render();
+            await Users.render();
           }
         } catch (e) {
           Toast.error('Failed to update status.');
+        }
+      });
+    });
+
+    document.querySelectorAll('.delete-user-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.userId;
+        const email = btn.dataset.userEmail;
+        if (!confirm(`Are you sure you want to permanently delete user "${email}" and all associated data?`)) {
+          return;
+        }
+        try {
+          const res = await fetch(`${THEMAR_API_BASE}/statements/users/${userId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            Toast.success(`User "${email}" deleted successfully.`);
+            await Users.render();
+            Dashboard.render();
+          } else {
+            const err = await res.text();
+            Toast.error(err || 'Failed to delete user.');
+          }
+        } catch (e) {
+          Toast.error('Network error deleting user.');
         }
       });
     });
@@ -2376,6 +2432,31 @@ const Users = {
   initEvents() {
     const refreshBtn = document.getElementById('btn-refresh-users');
     if (refreshBtn) refreshBtn.addEventListener('click', () => Users.render());
+
+    const purgeBtn = document.getElementById('btn-purge-users');
+    if (purgeBtn) {
+      purgeBtn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to delete ALL application users? Only the System Administrator (admin@themar.ip) will be kept.')) {
+          return;
+        }
+        try {
+          const res = await fetch(`${THEMAR_API_BASE}/statements/users/purge-non-admin`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            const data = await res.json();
+            Toast.success(data.message || 'All non-admin users deleted.');
+            await Users.render();
+            Dashboard.render();
+          } else {
+            const err = await res.text();
+            Toast.error(err || 'Failed to purge users.');
+          }
+        } catch (e) {
+          Toast.error('Network error during purge.');
+        }
+      });
+    }
   }
 };
 

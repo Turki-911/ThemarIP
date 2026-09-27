@@ -157,6 +157,14 @@
 
       <!-- KPI Cards -->
       <div class="kpi-grid" id="dashboard-kpi-grid">
+        <div class="kpi-card card-purple">
+          <div class="kpi-icon" style="background:rgba(139,92,246,0.15);color:var(--accent-purple)"><i data-lucide="users"></i></div>
+          <div class="kpi-data">
+            <span class="kpi-label">Registered Users</span>
+            <h2 class="kpi-value" id="kpi-total-users">1</h2>
+            <span class="kpi-trend trend-neutral" id="kpi-users-trend">1 Administrator</span>
+          </div>
+        </div>
         <div class="kpi-card card-blue">
           <div class="kpi-icon" style="background:rgba(59,130,246,0.15);color:var(--accent-blue)"><i data-lucide="activity"></i></div>
           <div class="kpi-data">
@@ -753,8 +761,9 @@
             <h2 style="font-size:18px;font-weight:600;margin:0;">User Management</h2>
             <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0 0;">Inspect user accounts, manage access status, and view profiles across all apps</p>
           </div>
-          <div class="header-actions">
+          <div class="header-actions" style="display:flex;gap:8px;">
             <button class="btn btn-secondary btn-sm" id="btn-refresh-users"><i data-lucide="refresh-cw"></i> Refresh Users</button>
+            <button class="btn btn-danger btn-sm" id="btn-purge-users" style="background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.3);"><i data-lucide="trash-2"></i> Delete All Users (Keep Admin Only)</button>
           </div>
         </div>
         <div class="table-responsive" style="overflow-x:auto;">

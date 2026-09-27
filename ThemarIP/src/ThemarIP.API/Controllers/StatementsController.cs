@@ -107,6 +107,58 @@ public class StatementsController : ControllerBase
         return BadRequest("Invalid access status.");
     }
 
+    [HttpDelete("users/{id}")]
+    public async Task<IActionResult> DeleteUser(
+        System.Guid id,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var user = await context.Users.FindAsync(id);
+        if (user == null) return NotFound("User not found.");
+
+        if (user.Email.Equals("admin@themar.ip", System.StringComparison.OrdinalIgnoreCase) ||
+            user.Role == ThemarIP.Domain.Enums.UserRole.Admin)
+        {
+            return BadRequest("Cannot delete system administrator account.");
+        }
+
+        var subs = context.Subscriptions.Where(s => s.UserId == id);
+        context.Subscriptions.RemoveRange(subs);
+
+        var kyc = context.KycSubmissions.Where(k => k.UserId == id);
+        context.KycSubmissions.RemoveRange(kyc);
+
+        var txns = context.PfmTransactions.Where(t => t.UserId == id);
+        context.PfmTransactions.RemoveRange(txns);
+
+        context.Users.Remove(user);
+        await context.SaveChangesAsync(default);
+        return Ok(new { message = $"User {user.Email} successfully deleted." });
+    }
+
+    [HttpDelete("users/purge-non-admin")]
+    public async Task<IActionResult> PurgeNonAdminUsers(
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var nonAdmins = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            context.Users.Where(u => u.Role != ThemarIP.Domain.Enums.UserRole.Admin && u.Email != "admin@themar.ip"));
+
+        var nonAdminIds = nonAdmins.Select(u => u.Id).ToList();
+
+        var subs = context.Subscriptions.Where(s => nonAdminIds.Contains(s.UserId));
+        context.Subscriptions.RemoveRange(subs);
+
+        var kyc = context.KycSubmissions.Where(k => nonAdminIds.Contains(k.UserId));
+        context.KycSubmissions.RemoveRange(kyc);
+
+        var txns = context.PfmTransactions.Where(t => nonAdminIds.Contains(t.UserId));
+        context.PfmTransactions.RemoveRange(txns);
+
+        context.Users.RemoveRange(nonAdmins);
+        await context.SaveChangesAsync(default);
+
+        return Ok(new { message = $"Successfully purged {nonAdmins.Count} users. Only administrator account remains." });
+    }
+
     [HttpDelete("transactions")]
     public async Task<IActionResult> DeleteAllTransactions([FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
     {

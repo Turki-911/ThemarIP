@@ -224,7 +224,7 @@ const SEED = {
 // STATE
 // ============================================================
 const state = {
-  token: localStorage.getItem('themarip_pfm_token') || null,
+  token: null,
   user: null,
 
   categories: JSON.parse(JSON.stringify(SEED.categories)),
@@ -447,50 +447,124 @@ function refreshIcons() {
 // ============================================================
 const Auth = {
   CREDENTIALS: { email:'admin@themar.ip', password:'AdminPassword123!' },
+  _pollInterval: null,
 
   init() {
     document.getElementById('login-form').addEventListener('submit', Auth.handleLogin);
     document.getElementById('btn-logout').addEventListener('click', Auth.handleLogout);
 
-    if (!state.token) {
-      state.token = 'pfm-admin-auto-token';
-      localStorage.setItem('themarip_pfm_token', state.token);
-    }
-    Auth.showApp();
+    // ALWAYS enforce login on entry — clear any previously cached session
+    state.token = null;
+    localStorage.removeItem('themarip_pfm_token');
+    sessionStorage.removeItem('themarip_pfm_token');
+
+    // Show login overlay and ensure app container is hidden
+    document.getElementById('app-container').classList.add('hidden');
+    document.getElementById('login-overlay').classList.remove('hidden');
+
+    const emailInput = document.getElementById('admin-email');
+    const passInput = document.getElementById('admin-password');
+    if (emailInput) emailInput.value = '';
+    if (passInput) passInput.value = '';
+
+    refreshIcons();
   },
 
-  handleLogin(e) {
+  async handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById('admin-email').value.trim();
     const password = document.getElementById('admin-password').value;
     const errorBanner = document.getElementById('login-error');
+    const errorText = document.getElementById('login-error-text');
+    const submitBtn = document.getElementById('btn-login');
 
-    if (email === Auth.CREDENTIALS.email && password === Auth.CREDENTIALS.password) {
-      state.token = 'pfm-admin-token-' + Date.now();
-      localStorage.setItem('themarip_pfm_token', state.token);
-      errorBanner.classList.add('hidden');
-      Auth.showApp();
-    } else {
-      document.getElementById('login-error-text').textContent = 'Invalid credentials. Check email and password.';
+    if (!email || !password) {
+      errorText.textContent = 'Please enter both administrator email and password.';
       errorBanner.classList.remove('hidden');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>Verifying credentials...</span>';
+
+    try {
+      let authorized = false;
+      let token = null;
+
+      // 1. Verify against real .NET backend Web API
+      try {
+        const res = await fetch(THEMAR_API_BASE + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          token = data.token;
+          authorized = true;
+        }
+      } catch (apiErr) {
+        console.warn('API login check fallback:', apiErr);
+      }
+
+      // 2. Also accept Master Administrator credentials
+      if (!authorized && email === Auth.CREDENTIALS.email && password === Auth.CREDENTIALS.password) {
+        token = 'pfm-admin-token-' + Date.now();
+        authorized = true;
+      }
+
+      if (authorized && token) {
+        state.token = token;
+        sessionStorage.setItem('themarip_pfm_token', token);
+        errorBanner.classList.add('hidden');
+        await Auth.showApp();
+      } else {
+        errorText.textContent = 'Access Denied: Invalid administrator credentials.';
+        errorBanner.classList.remove('hidden');
+        refreshIcons();
+      }
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>Authenticate &amp; Access</span><i data-lucide="arrow-right"></i>';
+      refreshIcons();
     }
   },
 
   handleLogout() {
+    if (Auth._pollInterval) {
+      clearInterval(Auth._pollInterval);
+      Auth._pollInterval = null;
+    }
     state.token = null;
     localStorage.removeItem('themarip_pfm_token');
+    sessionStorage.removeItem('themarip_pfm_token');
     document.getElementById('app-container').classList.add('hidden');
     document.getElementById('login-overlay').classList.remove('hidden');
+
+    const emailInput = document.getElementById('admin-email');
+    const passInput = document.getElementById('admin-password');
+    if (emailInput) emailInput.value = '';
+    if (passInput) passInput.value = '';
+
     // Destroy charts
-    Object.values(state.charts).forEach(c=>{ if(c) c.destroy(); });
+    Object.values(state.charts).forEach(c => { if(c) c.destroy(); });
     state.charts = {};
+    refreshIcons();
   },
 
-  showApp() {
+  async showApp() {
     document.getElementById('login-overlay').classList.add('hidden');
     document.getElementById('app-container').classList.remove('hidden');
     App.init();
     refreshIcons();
+
+    // Load CategoryRules and Merchants from themarip.db
+    await loadCategoryRulesFromDb();
+    await loadMerchantsFromDb();
+    loadRealTransactions();
+    if (!Auth._pollInterval) {
+      Auth._pollInterval = setInterval(loadRealTransactions, 5000);
+    }
   }
 };
 
@@ -2364,15 +2438,7 @@ const App = {
 // ============================================================
 // BOOTSTRAP
 // ============================================================
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   refreshIcons();
   Auth.init();
-  // Load CategoryRules and Merchants from themarip.db FIRST — this is the single categorization engine
-  await loadCategoryRulesFromDb();
-  await loadMerchantsFromDb();
-  // Then load and categorize transactions using DB rules
-  loadRealTransactions();
-  // Poll for new transactions every 5 seconds (Realtime reflection)
-  setInterval(loadRealTransactions, 5000);
-  refreshIcons();
 });

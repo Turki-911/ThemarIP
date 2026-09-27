@@ -1,0 +1,35 @@
+[
+  {
+    "id": "bank-muscat-sms-debit",
+    "bankName": "Bank Muscat",
+    "channel": "SMS",
+    "direction": "DEBIT",
+    "formatName": "Bank Muscat POS / Debit Purchase SMS",
+    "sampleText": "Your A/C ...1234 has been debited by OMR 28.655 on 06-09-2026 for POS purchase at LULU HYPERMARKET. Avail Bal: OMR 40.992.",
+    "patternRegex": "(?:A/C|Acct|Card)\\s*(?<account>[X*\\d.]+)?.*?debited by\\s*(?<currency>OMR|RO)?\\s*(?<amount>[0-9.]+)\\s+on\\s+(?<date>[0-9A-Za-z/-]+).*?at\\s+(?<merchant>[^.]+?)\\.\\s*Avail Bal:\\s*(?:OMR|RO)?\\s*(?<balance>[0-9.]+)",
+    "keywords": "debited by, POS purchase at, Avail Bal",
+    "isActive": true
+  },
+  {
+    "id": "bank-muscat-sms-credit",
+    "bankName": "Bank Muscat",
+    "channel": "SMS",
+    "direction": "CREDIT",
+    "formatName": "Bank Muscat Transfer / Salary Credit SMS",
+    "sampleText": "Your A/C ...1234 has been credited with OMR 40.000 on 03-08-2026 by Transfer from TURKI ALI. Avail Bal: OMR 69.647.",
+    "patternRegex": "(?:A/C|Acct|Card)\\s*(?<account>[X*\\d.]+)?.*?credited with\\s*(?<currency>OMR|RO)?\\s*(?<amount>[0-9.]+)\\s+on\\s+(?<date>[0-9A-Za-z/-]+).*?from\\s+(?<merchant>[^.]+?)\\.\\s*Avail Bal:\\s*(?:OMR|RO)?\\s*(?<balance>[0-9.]+)",
+    "keywords": "credited with, Transfer from, Avail Bal",
+    "isActive": true
+  },
+  {
+    "id": "bank-muscat-email-alert",
+    "bankName": "Bank Muscat",
+    "channel": "EMAIL",
+    "direction": "DEBIT",
+    "formatName": "Bank Muscat Transaction Alert Email",
+    "sampleText": "Bank Muscat Alert: A purchase of OMR 28.655 was made using your Debit Card ...5678 at LULU HYPERMARKET on 06-09-2026. Available balance: OMR 40.992.",
+    "patternRegex": "purchase of\\s*(?<currency>OMR|RO)?\\s*(?<amount>[0-9.]+).*?Card\\s*(?<account>[X*\\d.]+)?.*?at\\s+(?<merchant>[^.]+?)\\s+on\\s+(?<date>[0-9A-Za-z/-]+).*?balance:\\s*(?:OMR|RO)?\\s*(?<balance>[0-9.]+)",
+    "keywords": "Bank Muscat Alert, purchase of, Debit Card",
+    "isActive": true
+  }
+]

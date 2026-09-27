@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: themarip-api
+    env: docker
+    dockerfilePath: src/ThemarIP.API/Dockerfile
+    dockerContext: ThemarIP
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: DatabaseProvider
+        value: PostgreSQL
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: themarip-postgres
+          property: connectionString
+      - key: JwtSettings__Secret
+        generateValue: true
+      - key: JwtSettings__Issuer
+        value: ThemarIP.API
+      - key: JwtSettings__Audience
+        value: ThemarIP.Client
+      - key: JwtSettings__ExpiryMinutes
+        value: "1440"
+
+databases:
+  - name: themarip-postgres
+    databaseName: themarip_db
+    user: themar_admin
+    region: frankfurt
+    plan: free

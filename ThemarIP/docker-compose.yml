@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: themarip-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: themarip_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d themarip_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: src/ThemarIP.API/Dockerfile
+    container_name: themarip-api
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DatabaseProvider=PostgreSQL
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=themarip_db;Username=postgres;Password=postgres
+      - JwtSettings__Secret=ThemarIPSecretKeyForJWTAuthentication2026SuperSecureKey!
+      - JwtSettings__Issuer=ThemarIP.API
+      - JwtSettings__Audience=ThemarIP.Client
+      - JwtSettings__ExpiryMinutes=1440
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

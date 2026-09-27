@@ -1,0 +1,4 @@
+Bank Muscat Credit Card Statement
+Date,Description,Amount
+10/07/2026,STARBUCKS MUSCAT,3.500
+11/07/2026,LULU HYPERMARKET,22.000

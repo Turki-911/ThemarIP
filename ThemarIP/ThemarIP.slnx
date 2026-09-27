@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ThemarIP.API/ThemarIP.API.csproj" />
+    <Project Path="src/ThemarIP.Application/ThemarIP.Application.csproj" />
+    <Project Path="src/ThemarIP.Domain/ThemarIP.Domain.csproj" />
+    <Project Path="src/ThemarIP.Infrastructure/ThemarIP.Infrastructure.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,36 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# .NET / C#
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.dotnet-cli/
+*.log
+
+# SQLite local databases and backups
+*.db-shm
+*.db-wal
+backups/
+uploads_backup/
+
+# Flutter / Dart
+ThemarIP.App/.dart_tool/
+ThemarIP.App/.flutter-plugins
+ThemarIP.App/.flutter-plugins-dependencies
+ThemarIP.App/build/
+ThemarIP.App/ios/Pods/
+ThemarIP.App/ios/.symlinks/
+ThemarIP.App/android/.gradle/
+ThemarIP.App/android/local.properties
+ThemarIP.App/android/app/build/
+ThemarIP.App/android/app/themarip-release-key.jks
+ThemarIP.App/android/key.properties
+
+# Secrets
+.env
+.env.*
+!.env.example

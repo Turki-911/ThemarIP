@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThemarIP — PFM Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+
+<!-- ============================================================ -->
+<!-- LOGIN OVERLAY                                                  -->
+<!-- ============================================================ -->
+<div id="login-overlay" class="login-overlay">
+  <div class="login-card">
+    <div class="brand-logo">
+      <div class="logo-icon"><i data-lucide="shield-check"></i></div>
+      <h2>Themar<span>IP</span> Admin</h2>
+    </div>
+    <p class="login-subtitle">PFM Categorization & Intelligence Portal. Sign in with administrator credentials.</p>
+    <form id="login-form">
+      <div class="form-group">
+        <label class="form-label" for="admin-email">Admin Email</label>
+        <div class="input-with-icon">
+          <i data-lucide="mail"></i>
+          <input type="email" id="admin-email" class="form-control" value="admin@themar.ip" placeholder="admin@themar.ip" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="admin-password">Password</label>
+        <div class="input-with-icon">
+          <i data-lucide="lock"></i>
+          <input type="password" id="admin-password" class="form-control" value="AdminPassword123!" placeholder="••••••••••••" required>
+        </div>
+      </div>
+      <div id="login-error" class="error-banner hidden">
+        <i data-lucide="alert-circle"></i>
+        <span id="login-error-text">Invalid credentials.</span>
+      </div>
+      <button type="submit" id="btn-login" class="btn btn-primary btn-block">
+        <span>Authenticate &amp; Access</span>
+        <i data-lucide="arrow-right"></i>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MAIN APP CONTAINER                                            -->
+<!-- ============================================================ -->
+<div id="app-container" class="app-container hidden">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">
+        <div class="logo-box"><i data-lucide="brain-circuit"></i></div>
+        <div class="brand-text">
+          <h3>Themar<span>IP</span></h3>
+          <span class="badge-admin">PFM ADMIN</span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">OVERVIEW</div>
+      <a href="#" class="nav-item active" data-view="view-dashboard">
+        <i data-lucide="layout-dashboard"></i><span>Dashboard</span>
+      </a>
+
+      <div class="nav-section-title">TRANSACTIONS</div>
+      <a href="#" class="nav-item" data-view="view-transactions">
+        <i data-lucide="activity"></i><span>Transactions</span>
+        <span class="count-badge" id="nav-uncategorized-count">0</span>
+      </a>
+
+      <div class="nav-section-title">CATEGORIZATION</div>
+      <a href="#" class="nav-item" data-view="view-categories">
+        <i data-lucide="tag"></i><span>Categories</span>
+      </a>
+      <a href="#" class="nav-item" data-view="view-rules">
+        <i data-lucide="sliders-horizontal"></i><span>Categorization Rules</span>
+        <span class="count-badge" id="nav-rules-count">0</span>
+      </a>
+      <a href="#" class="nav-item" data-view="view-merchants">
+        <i data-lucide="store"></i><span>Merchants</span>
+        <span class="count-badge" id="nav-merchants-count">0</span>
+      </a>
+      <a href="#" class="nav-item" data-view="view-confidence">
+        <i data-lucide="gauge"></i><span>Confidence Settings</span>
+      </a>
+
+      <div class="nav-section-title">LEARNING</div>
+      <a href="#" class="nav-item" data-view="view-corrections">
+        <i data-lucide="user-pen"></i><span>User Corrections</span>
+        <span class="count-badge nav-badge-alert" id="nav-corrections-count">0</span>
+      </a>
+
+      <div class="nav-section-title">INTELLIGENCE</div>
+      <a href="#" class="nav-item" data-view="view-intelligence">
+        <i data-lucide="sparkles"></i><span>Intelligence Rules</span>
+      </a>
+
+      <div class="nav-section-title">SYSTEM</div>
+      <a href="#" class="nav-item" data-view="view-users">
+        <i data-lucide="users"></i><span>Users</span>
+        <span class="count-badge" id="nav-users-count">0</span>
+      </a>
+      <a href="#" class="nav-item" data-view="view-settings">
+        <i data-lucide="settings"></i><span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-profile-widget">
+        <div class="avatar"><i data-lucide="user-check"></i></div>
+        <div class="user-info">
+          <span class="user-name" id="current-admin-name">System Administrator</span>
+          <span class="user-role" id="current-admin-email">admin@themar.ip</span>
+        </div>
+      </div>
+      <button id="btn-logout" class="btn-logout" title="Sign Out">
+        <i data-lucide="log-out"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN CONTENT ===================== -->
+  <main class="main-content">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 id="page-title">Dashboard</h1>
+        <p class="subtitle" id="page-subtitle">PFM Categorization Engine overview and key metrics.</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="api-status-badge">
+          <span class="status-dot online"></span>
+          <span>Engine Active</span>
+        </div>
+        <button id="btn-refresh" class="btn btn-secondary btn-icon-only" title="Refresh">
+          <i data-lucide="refresh-cw"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 1: DASHBOARD                                            -->
+    <!-- =========================================================== -->
+    <section id="view-dashboard" class="content-view active">
+
+      <!-- KPI Cards -->
+      <div class="kpi-grid" id="dashboard-kpi-grid">
+        <div class="kpi-card card-blue">
+          <div class="kpi-icon" style="background:rgba(59,130,246,0.15);color:var(--accent-blue)"><i data-lucide="activity"></i></div>
+          <div class="kpi-data">
+            <span class="kpi-label">Total Transactions</span>
+            <h2 class="kpi-value" id="kpi-total-txn">—</h2>
+            <span class="kpi-trend trend-neutral">All time ingested records</span>
+          </div>
+        </div>
+        <div class="kpi-card card-emerald">
+          <div class="kpi-icon" style="background:rgba(16,185,129,0.15);color:var(--accent-emerald)"><i data-lucide="check-circle-2"></i></div>
+          <div class="kpi-data">
+            <span class="kpi-label">Categorized</span>
+            <h2 class="kpi-value" id="kpi-categorized">—</h2>
+            <span class="kpi-trend trend-up" id="kpi-categorized-pct"><i data-lucide="trending-up"></i> — of total</span>
+          </div>
+        </div>
+        <div class="kpi-card card-rose">
+          <div class="kpi-icon" style="background:rgba(244,63,94,0.15);color:var(--accent-rose)"><i data-lucide="help-circle"></i></div>
+          <div class="kpi-data">
+            <span class="kpi-label">Uncategorized</span>
+            <h2 class="kpi-value" id="kpi-uncategorized">—</h2>
+            <span class="kpi-trend trend-down">Pending review</span>
+          </div>
+        </div>
+        <div class="kpi-card card-emerald">
+          <div class="kpi-icon" style="background:rgba(16,185,129,0.12);color:var(--accent-emerald)"><i data-lucide="shield-check"></i></div>
+          <div class="kpi-data">
+            <span class="kpi-label">High Confidence</span>
+            <h2 class="kpi-value" id="kpi-high-conf">—</h2>
+            <span class="kpi-trend trend-up">≥ 90% threshold</span>
+          </div>
+        </div>
+        <div class="kpi-card card-amber">
+          <div class="kpi-icon" style="background:rgba(245,158,11,0.15);color:var(--accent-amber)"><i data-lucide="shield-alert"></i></div>
+          <div class="kpi-data">
+            <span class="kpi-label">Medium Confidence</span>
+            <h2 class="kpi-value" id="kpi-med-conf">—</h2>
+            <span class="kpi-trend trend-neutral">70–89% threshold</span>
+          </div>
+        </div>
+        <div class="kpi-card card-rose">
+          <div class="kpi-icon" style="background:rgba(244,63,94,0.12);color:var(--accent-rose)"><i data-lucide="shield-x"></i></div>
+          <div class="kpi-data">
+            <span class="kpi-label">Low Confidence</span>
+            <h2 class="kpi-value" id="kpi-low-conf">—</h2>
+            <span class="kpi-trend trend-down">&lt; 70% threshold</span>
+          </div>
+        </div>
+        <div class="kpi-card card-purple">
+          <div class="kpi-icon" style="background:rgba(139,92,246,0.15);color:var(--accent-purple)"><i data-lucide="message-square-warning"></i></div>
+          <div class="kpi-data">
+            <span class="kpi-label">Pending Corrections</span>
+            <h2 class="kpi-value" id="kpi-pending-corrections">—</h2>
+            <span class="kpi-trend trend-neutral">Awaiting admin review</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-grid" style="margin-top:24px;">
+        <div class="chart-card card-large">
+          <div class="card-header">
+            <div class="card-title"><h3>Categorization Rate</h3><span>Categorized vs Uncategorized over time</span></div>
+          </div>
+          <div class="chart-wrapper"><canvas id="chart-categorization-rate"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="card-header">
+            <div class="card-title"><h3>Confidence Distribution</h3><span>High / Medium / Low breakdown</span></div>
+          </div>
+          <div class="chart-wrapper"><canvas id="chart-confidence-dist"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="card-header">
+            <div class="card-title"><h3>Transactions by Category</h3><span>Top categories by volume</span></div>
+          </div>
+          <div class="chart-wrapper"><canvas id="chart-by-category"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="card-header">
+            <div class="card-title"><h3>Uncategorized Over Time</h3><span>Daily uncategorized transaction trend</span></div>
+          </div>
+          <div class="chart-wrapper"><canvas id="chart-uncategorized-trend"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Alerts Panel -->
+      <div style="margin-top:24px;">
+        <div class="view-header">
+          <div><h2 class="section-title">Alerts &amp; Insights</h2><p class="section-subtitle">Items requiring admin attention</p></div>
+        </div>
+        <div class="alerts-panel">
+          <div class="alert-card alert-warning">
+            <div class="alert-header"><i data-lucide="store" class="alert-icon"></i><span class="alert-title">Top Uncategorized Merchants</span></div>
+            <div class="alert-body" id="alert-uncategorized-merchants">Loading…</div>
+          </div>
+          <div class="alert-card alert-danger">
+            <div class="alert-header"><i data-lucide="rotate-ccw" class="alert-icon"></i><span class="alert-title">High Correction Rate Merchants</span></div>
+            <div class="alert-body" id="alert-high-correction-merchants">Loading…</div>
+          </div>
+          <div class="alert-card alert-info">
+            <div class="alert-header"><i data-lucide="lightbulb" class="alert-icon"></i><span class="alert-title">New Suggested Rules</span></div>
+            <div class="alert-body" id="alert-suggested-rules">Loading…</div>
+          </div>
+          <div class="alert-card alert-warning">
+            <div class="alert-header"><i data-lucide="zap" class="alert-icon"></i><span class="alert-title">Frequently Triggering Intelligence Rules</span></div>
+            <div class="alert-body" id="alert-intel-rules">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 2: TRANSACTIONS                                         -->
+    <!-- =========================================================== -->
+    <section id="view-transactions" class="content-view hidden">
+      <div class="table-container-card">
+        <div class="table-controls">
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input type="text" id="txn-search" placeholder="Search merchant, narration…">
+          </div>
+          <div class="filter-group">
+            <select id="txn-filter-category" class="form-control filter-select">
+              <option value="">All Categories</option>
+            </select>
+            <select id="txn-filter-source" class="form-control filter-select">
+              <option value="">All Sources</option>
+              <option value="MERCHANT_MAPPING">Merchant Mapping</option>
+              <option value="MCC">MCC</option>
+              <option value="RULE">Rule</option>
+              <option value="NARRATION">Narration</option>
+              <option value="HISTORICAL">Historical</option>
+              <option value="USER_RULE">User Rule</option>
+              <option value="MANUAL">Manual</option>
+              <option value="UNCATEGORIZED">Uncategorized</option>
+            </select>
+            <select id="txn-filter-confidence" class="form-control filter-select">
+              <option value="">All Confidence</option>
+              <option value="high">High (≥90%)</option>
+              <option value="medium">Medium (70–89%)</option>
+              <option value="low">Low (&lt;70%)</option>
+            </select>
+            <select id="txn-filter-type" class="form-control filter-select">
+              <option value="">Debit &amp; Credit</option>
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
+            </select>
+            <select id="txn-filter-status" class="form-control filter-select">
+              <option value="">All Status</option>
+              <option value="categorized">Categorized</option>
+              <option value="uncategorized">Uncategorized</option>
+              <option value="user_corrected">User Corrected</option>
+            </select>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+            <span class="kpi-trend" id="txn-count-label" style="white-space:nowrap"></span>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Merchant</th>
+                <th>Narration</th>
+                <th>Amount</th>
+                <th>Type</th>
+                <th>Balance</th>
+                <th>Category</th>
+                <th>Subcategory</th>
+                <th>Confidence</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-transactions"></tbody>
+          </table>
+        </div>
+        <div class="table-pagination">
+          <span class="pagination-info" id="txn-pagination-info">Showing 0 of 0</span>
+          <div class="pagination-buttons">
+            <button id="txn-prev-btn" class="btn btn-sm btn-secondary" disabled>Previous</button>
+            <span id="txn-page-badge" class="page-badge">Page 1</span>
+            <button id="txn-next-btn" class="btn btn-sm btn-secondary" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 3: CATEGORIES                                           -->
+    <!-- =========================================================== -->
+    <section id="view-categories" class="content-view hidden">
+      <div class="view-header">
+        <div>
+          <h2 class="section-title">Category Hierarchy</h2>
+          <p class="section-subtitle">Manage categories and subcategories used for transaction classification.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-add-category">
+          <i data-lucide="plus"></i> Add Category
+        </button>
+      </div>
+      <div class="table-container-card" style="padding:0;">
+        <div class="category-tree" id="category-tree"><!-- populated by JS --></div>
+      </div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 4: CATEGORIZATION RULES                                 -->
+    <!-- =========================================================== -->
+    <section id="view-rules" class="content-view hidden">
+      <div class="view-header">
+        <div>
+          <h2 class="section-title">Categorization Rules</h2>
+          <p class="section-subtitle">Rules determine how transactions are automatically categorized. Highest priority wins when multiple rules match.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-add-rule">
+          <i data-lucide="plus"></i> New Rule
+        </button>
+      </div>
+      <div class="table-container-card">
+        <div class="table-controls">
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input type="text" id="rules-search" placeholder="Search rules…">
+          </div>
+          <div class="filter-group">
+            <select id="rules-filter-status" class="form-control filter-select">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Rule Name</th>
+                <th>Conditions</th>
+                <th>Category → Subcategory</th>
+                <th>Confidence</th>
+                <th style="text-align:center;">Priority</th>
+                <th>Matches</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-rules"></tbody>
+          </table>
+        </div>
+        <div class="table-pagination">
+          <span class="pagination-info" id="rules-pagination-info">Showing 0 of 0</span>
+          <div class="pagination-buttons">
+            <button id="rules-prev-btn" class="btn btn-sm btn-secondary" disabled>Previous</button>
+            <span id="rules-page-badge" class="page-badge">Page 1</span>
+            <button id="rules-next-btn" class="btn btn-sm btn-secondary" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 5: MERCHANTS                                            -->
+    <!-- =========================================================== -->
+    <section id="view-merchants" class="content-view hidden">
+      <div class="view-header">
+        <div>
+          <h2 class="section-title">Merchant Management</h2>
+          <p class="section-subtitle">Map merchants to default categories, manage aliases, and set confidence levels.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-add-merchant">
+          <i data-lucide="plus"></i> Add Merchant
+        </button>
+      </div>
+      <div class="table-container-card">
+        <div class="table-controls">
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input type="text" id="merchants-search" placeholder="Search merchants or aliases…">
+          </div>
+          <div class="filter-group">
+            <select id="merchants-filter-status" class="form-control filter-select">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <select id="merchants-filter-category" class="form-control filter-select">
+              <option value="">All Categories</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Merchant</th>
+                <th>Aliases</th>
+                <th>MCC</th>
+                <th>Default Category</th>
+                <th>Confidence</th>
+                <th>Transactions</th>
+                <th>Correction Rate</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-merchants"></tbody>
+          </table>
+        </div>
+        <div class="table-pagination">
+          <span class="pagination-info" id="merchants-pagination-info">Showing 0 of 0</span>
+          <div class="pagination-buttons">
+            <button id="merchants-prev-btn" class="btn btn-sm btn-secondary" disabled>Previous</button>
+            <span id="merchants-page-badge" class="page-badge">Page 1</span>
+            <button id="merchants-next-btn" class="btn btn-sm btn-secondary" disabled>Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 6: CONFIDENCE SETTINGS                                  -->
+    <!-- =========================================================== -->
+    <section id="view-confidence" class="content-view hidden">
+      <div class="view-header">
+        <div>
+          <h2 class="section-title">Confidence Settings</h2>
+          <p class="section-subtitle">Configure confidence thresholds, band actions, and scoring weights for the categorization engine.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-save-confidence">
+          <i data-lucide="save"></i> Save Changes
+        </button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <!-- Confidence Bands -->
+        <div class="table-container-card" style="padding:24px;">
+          <h3 style="font-size:15px;font-weight:600;margin-bottom:4px;">Confidence Bands</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">Define thresholds and the action taken at each confidence level.</p>
+
+          <div class="confidence-band" id="band-high">
+            <div class="band-label" style="color:var(--confidence-high)"><i data-lucide="shield-check" style="width:14px;"></i> High Confidence</div>
+            <div class="band-range-row">
+              <input type="number" id="band-high-min" class="form-control" style="width:80px;" value="90" min="0" max="100">
+              <span style="color:var(--text-muted);">—</span>
+              <input type="number" id="band-high-max" class="form-control" style="width:80px;" value="100" min="0" max="100">
+              <span style="font-size:12px;color:var(--text-muted);">%</span>
+            </div>
+            <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+              <label class="form-label">Action</label>
+              <select id="band-high-action" class="form-control">
+                <option value="auto_categorize" selected>Auto-categorize</option>
+                <option value="categorize_monitor">Categorize &amp; Monitor</option>
+                <option value="send_to_review">Send to Review</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="confidence-band" id="band-medium" style="margin-top:16px;">
+            <div class="band-label" style="color:var(--confidence-medium)"><i data-lucide="shield-alert" style="width:14px;"></i> Medium Confidence</div>
+            <div class="band-range-row">
+              <input type="number" id="band-med-min" class="form-control" style="width:80px;" value="70" min="0" max="100">
+              <span style="color:var(--text-muted);">—</span>
+              <input type="number" id="band-med-max" class="form-control" style="width:80px;" value="89" min="0" max="100">
+              <span style="font-size:12px;color:var(--text-muted);">%</span>
+            </div>
+            <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+              <label class="form-label">Action</label>
+              <select id="band-med-action" class="form-control">
+                <option value="auto_categorize">Auto-categorize</option>
+                <option value="categorize_monitor" selected>Categorize &amp; Monitor</option>
+                <option value="send_to_review">Send to Review</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="confidence-band" id="band-low" style="margin-top:16px;">
+            <div class="band-label" style="color:var(--confidence-low)"><i data-lucide="shield-x" style="width:14px;"></i> Low Confidence</div>
+            <div class="band-range-row">
+              <input type="number" id="band-low-min" class="form-control" style="width:80px;" value="0" min="0" max="100">
+              <span style="color:var(--text-muted);">—</span>
+              <input type="number" id="band-low-max" class="form-control" style="width:80px;" value="69" min="0" max="100">
+              <span style="font-size:12px;color:var(--text-muted);">%</span>
+            </div>
+            <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+              <label class="form-label">Action</label>
+              <select id="band-low-action" class="form-control">
+                <option value="auto_categorize">Auto-categorize</option>
+                <option value="categorize_monitor">Categorize &amp; Monitor</option>
+                <option value="send_to_review" selected>Send to Review</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scoring Weights -->
+        <div class="table-container-card" style="padding:24px;">
+          <h3 style="font-size:15px;font-weight:600;margin-bottom:4px;">Scoring Weights</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">Control how much each signal contributes to the overall confidence score. Must total 100%.</p>
+
+          <div id="weight-visual" class="weight-visual"></div>
+
+          <div class="weight-editor" id="weight-editor">
+            <div class="weight-row">
+              <div class="weight-color-dot" style="background:#3B82F6;"></div>
+              <span class="weight-label">Merchant Match</span>
+              <input type="number" id="w-merchant" class="form-control weight-input" value="40" min="0" max="100">
+              <span class="weight-unit">%</span>
+            </div>
+            <div class="weight-row">
+              <div class="weight-color-dot" style="background:#8B5CF6;"></div>
+              <span class="weight-label">MCC Match</span>
+              <input type="number" id="w-mcc" class="form-control weight-input" value="30" min="0" max="100">
+              <span class="weight-unit">%</span>
+            </div>
+            <div class="weight-row">
+              <div class="weight-color-dot" style="background:#06B6D4;"></div>
+              <span class="weight-label">Narration Match</span>
+              <input type="number" id="w-narration" class="form-control weight-input" value="15" min="0" max="100">
+              <span class="weight-unit">%</span>
+            </div>
+            <div class="weight-row">
+              <div class="weight-color-dot" style="background:#10B981;"></div>
+              <span class="weight-label">Historical Match</span>
+              <input type="number" id="w-historical" class="form-control weight-input" value="10" min="0" max="100">
+              <span class="weight-unit">%</span>
+            </div>
+            <div class="weight-row">
+              <div class="weight-color-dot" style="background:#F97316;"></div>
+              <span class="weight-label">Amount Pattern</span>
+              <input type="number" id="w-amount" class="form-control weight-input" value="5" min="0" max="100">
+              <span class="weight-unit">%</span>
+            </div>
+            <div class="weight-total-row">
+              <span>Total:</span>
+              <span id="weight-total-display" class="weight-total">100%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 7: USER CORRECTIONS                                     -->
+    <!-- =========================================================== -->
+    <section id="view-corrections" class="content-view hidden">
+      <!-- Sub-tabs -->
+      <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border-color);padding-bottom:0;">
+        <button class="corrections-tab active" data-tab="tab-corrections-queue">
+          <i data-lucide="inbox"></i> Correction Queue <span class="count-badge" id="tab-corrections-count" style="margin-left:6px;">0</span>
+        </button>
+        <button class="corrections-tab" data-tab="tab-suggested-rules">
+          <i data-lucide="lightbulb"></i> Suggested Rules <span class="count-badge" id="tab-suggestions-count" style="margin-left:6px;">0</span>
+        </button>
+      </div>
+
+      <!-- Tab: Correction Queue -->
+      <div id="tab-corrections-queue" class="corrections-tab-panel">
+        <div class="table-container-card">
+          <div class="table-controls">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="corrections-search" placeholder="Search corrections…">
+            </div>
+            <div class="filter-group">
+              <select id="corrections-filter-status" class="form-control filter-select">
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Transaction</th>
+                  <th>AI Category</th>
+                  <th>Confidence</th>
+                  <th>User Changed To</th>
+                  <th>User</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-corrections"></tbody>
+            </table>
+          </div>
+          <div class="table-pagination">
+            <span class="pagination-info" id="corrections-pagination-info">Showing 0 of 0</span>
+            <div class="pagination-buttons">
+              <button id="corrections-prev-btn" class="btn btn-sm btn-secondary" disabled>Previous</button>
+              <span id="corrections-page-badge" class="page-badge">Page 1</span>
+              <button id="corrections-next-btn" class="btn btn-sm btn-secondary" disabled>Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Suggested Rules -->
+      <div id="tab-suggested-rules" class="corrections-tab-panel hidden">
+        <div style="margin-bottom:12px;">
+          <p style="font-size:13px;color:var(--text-muted);">The system detects repeated user corrections and surfaces them here as suggested global rules for admin review.</p>
+        </div>
+        <div id="suggested-rules-grid" class="suggested-rules-grid"><!-- populated by JS --></div>
+      </div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 8: INTELLIGENCE RULES                                   -->
+    <!-- =========================================================== -->
+    <section id="view-intelligence" class="content-view hidden">
+      <div class="view-header">
+        <div>
+          <h2 class="section-title">Intelligence Rules</h2>
+          <p class="section-subtitle">Financial insight triggers based on transactions, balances, spending patterns, and historical behaviour.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-add-intel-rule">
+          <i data-lucide="plus"></i> New Rule
+        </button>
+      </div>
+      <div id="intelligence-rules-grid" class="intelligence-rules-grid"><!-- populated by JS --></div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 9: SETTINGS                                             -->
+    <!-- =========================================================== -->
+    <section id="view-settings" class="content-view hidden">
+      <div style="max-width:820px;">
+        <div class="table-container-card" style="padding:24px;margin-bottom:20px;">
+          <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:16px;display:flex;align-items:center;gap:8px;"><i data-lucide="lock" style="width:14px;color:var(--accent-amber);"></i>OAuth2 Client Credentials</h3>
+          <div class="form-row">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">X-IBM-CLIENT-ID</label>
+              <input type="text" id="config-client-id" class="form-control" style="font-family:monospace;">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">Client Secret</label>
+              <input type="password" id="config-client-secret" class="form-control" style="font-family:monospace;">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Token URL</label>
+            <input type="text" disabled value="{BASE_URL}/oauth2/token" class="form-control" style="font-family:monospace;opacity:0.5;">
+          </div>
+        </div>
+
+        <div class="table-container-card" style="padding:24px;margin-bottom:20px;">
+          <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:16px;display:flex;align-items:center;gap:8px;"><i data-lucide="globe" style="width:14px;color:var(--accent-blue);"></i>API Base URL</h3>
+          <div class="form-group">
+            <label class="form-label">NBO Gateway Base URL</label>
+            <input type="text" id="config-base-url" class="form-control" style="font-family:monospace;">
+          </div>
+        </div>
+
+        <div class="table-container-card" style="padding:24px;margin-bottom:20px;">
+          <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:16px;display:flex;align-items:center;gap:8px;"><i data-lucide="file-text" style="width:14px;color:var(--accent-purple);"></i>Request Defaults</h3>
+          <div class="form-row">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">Client Code</label>
+              <input type="text" id="config-client-code" class="form-control" placeholder="Leave empty for Sandbox" style="font-family:monospace;">
+            </div>
+          </div>
+          <button id="btn-save-config" class="btn btn-primary">
+            <i data-lucide="save"></i> Save Configuration
+          </button>
+        </div>
+
+        <!-- Audit Log -->
+        <div class="table-container-card" style="padding:0;">
+          <div class="card-header" style="padding:16px 20px;">
+            <div class="card-title">
+              <h3>Audit Log</h3>
+              <span>Recent admin actions recorded by the system</span>
+            </div>
+          </div>
+          <div style="padding:8px 0;" id="audit-log-list"><!-- populated by JS --></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================== -->
+    <!-- VIEW 10: USER MANAGEMENT                                    -->
+    <!-- =========================================================== -->
+    <section id="view-users" class="content-view hidden">
+      <div class="table-container-card">
+        <div class="table-card-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border-color, rgba(255,255,255,0.08));">
+          <div class="header-left">
+            <h2 style="font-size:18px;font-weight:600;margin:0;">User Management</h2>
+            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0 0;">Inspect user accounts, manage access status, and view profiles across all apps</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-secondary btn-sm" id="btn-refresh-users"><i data-lucide="refresh-cw"></i> Refresh Users</button>
+          </div>
+        </div>
+        <div class="table-responsive" style="overflow-x:auto;">
+          <table class="data-table" id="users-table" style="width:100%;text-align:left;">
+            <thead>
+              <tr>
+                <th style="padding:12px 16px;">User / Full Name</th>
+                <th style="padding:12px 16px;">Email</th>
+                <th style="padding:12px 16px;">Account Number</th>
+                <th style="padding:12px 16px;">Role</th>
+                <th style="padding:12px 16px;">Access Status</th>
+                <th style="padding:12px 16px;">Trust Score</th>
+                <th style="padding:12px 16px;">Joined</th>
+                <th style="padding:12px 16px;text-align:right;">Control</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+              <!-- populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============================================================ -->
+<!-- TRANSACTION DETAIL DRAWER                                      -->
+<!-- ============================================================ -->
+<div id="drawer-overlay" class="drawer-overlay hidden"></div>
+<div id="txn-drawer" class="drawer">
+  <div class="drawer-header">
+    <div>
+      <h2 class="drawer-title">Transaction Detail</h2>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">Full categorization trace &amp; confidence breakdown</p>
+    </div>
+    <button class="drawer-close-btn" id="txn-drawer-close"><i data-lucide="x"></i></button>
+  </div>
+  <div class="drawer-body" id="txn-drawer-body"><!-- populated by JS --></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MERCHANT EDIT DRAWER                                           -->
+<!-- ============================================================ -->
+<div id="merchant-drawer" class="drawer">
+  <div class="drawer-header">
+    <div>
+      <h2 class="drawer-title" id="merchant-drawer-title">Edit Merchant</h2>
+    </div>
+    <button class="drawer-close-btn" id="merchant-drawer-close"><i data-lucide="x"></i></button>
+  </div>
+  <div class="drawer-body">
+    <form id="merchant-form">
+      <input type="hidden" id="merchant-form-id">
+      <div class="form-group">
+        <label class="form-label">Merchant Name *</label>
+        <input type="text" id="merchant-form-name" class="form-control" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">MCC Code</label>
+        <input type="text" id="merchant-form-mcc" class="form-control" placeholder="e.g. 5411">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Category</label>
+        <select id="merchant-form-category" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Subcategory</label>
+        <select id="merchant-form-subcategory" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Default Confidence (%)</label>
+        <input type="number" id="merchant-form-confidence" class="form-control" min="0" max="100" value="90">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select id="merchant-form-status" class="form-control">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Aliases</label>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">One alias per line. Used for text normalization when matching narrations.</p>
+        <textarea id="merchant-form-aliases" class="form-control" rows="5" placeholder="LULU HYPER&#10;LULU HYPERMARKET&#10;LULU AL KHUWAIR"></textarea>
+      </div>
+    </form>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary" id="merchant-drawer-cancel">Cancel</button>
+    <button class="btn btn-primary" id="merchant-drawer-save"><i data-lucide="save"></i> Save Merchant</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- RULE BUILDER MODAL                                            -->
+<!-- ============================================================ -->
+<div id="rule-modal-overlay" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 class="modal-title" id="rule-modal-title">Create Categorization Rule</h2>
+      <button class="drawer-close-btn" id="rule-modal-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rule-form-id">
+      <div class="form-group">
+        <label class="form-label">Rule Name *</label>
+        <input type="text" id="rule-form-name" class="form-control" placeholder="e.g. Starbucks Coffee">
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Priority (1–100)</label>
+          <input type="number" id="rule-form-priority" class="form-control" min="1" max="100" value="50">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Confidence (%)</label>
+          <input type="number" id="rule-form-confidence" class="form-control" min="0" max="100" value="85">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Status</label>
+          <select id="rule-form-status" class="form-control">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Conditions -->
+      <div style="margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">IF Conditions</div>
+      <div id="rule-conditions-container"></div>
+      <button class="btn btn-secondary btn-sm" id="btn-add-condition" style="margin-top:8px;">
+        <i data-lucide="plus"></i> Add Condition
+      </button>
+
+      <!-- THEN -->
+      <div class="then-block" style="margin-top:20px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent-blue);">THEN — Assign Category</div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Category *</label>
+            <select id="rule-form-category" class="form-control"></select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Subcategory</label>
+            <select id="rule-form-subcategory" class="form-control"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="rule-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="rule-modal-save"><i data-lucide="save"></i> Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- CATEGORY MODAL                                               -->
+<!-- ============================================================ -->
+<div id="category-modal-overlay" class="modal-overlay hidden">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="category-modal-title">Add Category</h2>
+      <button class="drawer-close-btn" id="category-modal-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cat-form-id">
+      <input type="hidden" id="cat-form-parent-id">
+      <div class="form-group">
+        <label class="form-label" id="cat-form-name-label">Category Name *</label>
+        <input type="text" id="cat-form-name" class="form-control" required>
+      </div>
+      <div class="form-group" id="cat-form-icon-group">
+        <label class="form-label">Icon (Lucide name)</label>
+        <input type="text" id="cat-form-icon" class="form-control" placeholder="e.g. utensils, car, shopping-bag">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="category-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="category-modal-save"><i data-lucide="save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- CORRECTION ACTION MODAL                                      -->
+<!-- ============================================================ -->
+<div id="correction-modal-overlay" class="modal-overlay hidden">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Review Correction</h2>
+      <button class="drawer-close-btn" id="correction-modal-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="correction-modal-body"><!-- populated by JS --></div>
+    <div class="modal-footer" id="correction-modal-footer"><!-- populated by JS --></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- INTELLIGENCE RULE EDIT MODAL                                 -->
+<!-- ============================================================ -->
+<div id="intel-modal-overlay" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 class="modal-title" id="intel-modal-title">Edit Intelligence Rule</h2>
+      <button class="drawer-close-btn" id="intel-modal-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="intel-modal-body"><!-- populated by JS --></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="intel-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="intel-modal-save"><i data-lucide="save"></i> Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- CONFIRM DIALOG                                               -->
+<!-- ============================================================ -->
+<div id="confirm-overlay" class="modal-overlay hidden">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="confirm-title">Confirm Action</h2>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-message" style="color:var(--text-muted);font-size:14px;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TOAST CONTAINER                                              -->
+<!-- ============================================================ -->
+<div id="toast-container" class="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

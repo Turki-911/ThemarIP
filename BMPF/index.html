@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BMPF — Bank Muscat PFM Statement Extractor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="logo">
+        <div class="logo-badge">
+          <i data-lucide="file-text"></i>
+        </div>
+        <div class="logo-text">
+          <span class="brand-title">BMPF</span>
+          <span class="brand-sub">BANK MUSCAT PFM EXTRACTOR</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" id="navTabExtractor" onclick="switchPage('extractor')">
+          <i data-lucide="file-text"></i> PDF Extractor
+        </button>
+        <button class="nav-tab" id="navTabCategories" onclick="switchPage('categories')">
+          <i data-lucide="layers"></i> Category Hierarchy
+        </button>
+      </nav>
+
+      <div class="nav-status">
+        <div class="status-indicator online"></div>
+        <span class="status-text">Connected to <strong class="code-tag">themarip.db</strong></span>
+      </div>
+
+      <!-- User Authentication & Profile -->
+      <div class="user-auth-section" id="userAuthSection">
+        <div id="authLoggedOut" class="auth-buttons">
+          <button class="btn-auth btn-auth-login" onclick="openAuthModal('login')">
+            <i data-lucide="log-in"></i> Sign In
+          </button>
+          <button class="btn-auth btn-auth-register" onclick="openAuthModal('register')">
+            <i data-lucide="user-plus"></i> Sign Up
+          </button>
+        </div>
+        <div id="authLoggedIn" class="user-profile-chip hidden">
+          <div class="user-avatar" id="userAvatarChar">U</div>
+          <div class="user-meta">
+            <span class="user-display-name" id="userDisplayName">User Name</span>
+            <span class="user-account-badge" id="userAccountBadge">Isolated</span>
+          </div>
+          <button class="btn-logout-icon" onclick="logoutUser()" title="Sign Out">
+            <i data-lucide="log-out"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+
+    <!-- PAGE 1: TRANSACTION INGESTION & PARSER -->
+    <div id="pageExtractor">
+      <!-- Hero Header -->
+      <section class="hero-section">
+        <h1>Bank Muscat Transaction Ingestion</h1>
+        <p class="subtitle">Ingest transactions from official Bank Muscat statements, incoming SMS alerts, or Email notifications directly into <code class="code-tag">themarip.db</code>.</p>
+      </section>
+
+      <!-- Data Source Switcher: Statement PDF | Bank SMS | Bank Email -->
+      <div style="display: flex; justify-content: center; margin-bottom: 28px;">
+        <div class="nav-tabs" style="padding: 6px; gap: 8px;">
+          <button class="nav-tab active" id="tabSourcePdf" onclick="switchIngestSource('pdf')">
+            <i data-lucide="file-text"></i> Statement PDF
+          </button>
+          <button class="nav-tab" id="tabSourceSms" onclick="switchIngestSource('sms')">
+            <i data-lucide="message-square"></i> Bank SMS
+          </button>
+          <button class="nav-tab" id="tabSourceEmail" onclick="switchIngestSource('email')">
+            <i data-lucide="mail"></i> Bank Email
+          </button>
+        </div>
+      </div>
+
+      <!-- SOURCE 1: STATEMENT PDF -->
+      <div id="sourcePdfContainer">
+        <!-- Upload Dropzone Section -->
+        <section class="upload-section">
+          <div class="dropzone-card" id="dropzone">
+            <input type="file" id="fileInput" accept=".pdf" class="file-input">
+            <div class="dropzone-content">
+              <div class="upload-icon-wrapper">
+                <i data-lucide="upload-cloud"></i>
+              </div>
+              <h3>Select or Drop Bank Muscat PDF Statement</h3>
+              <p>Supports multi-page official Bank Muscat account statements (.pdf)</p>
+              <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                <i data-lucide="file-plus"></i> Choose File
+              </button>
+            </div>
+            <div class="file-selected-bar hidden" id="fileSelectedBar">
+              <div class="file-info">
+                <i data-lucide="file-check-2" class="file-icon"></i>
+                <div class="file-details">
+                  <span id="fileName" class="file-name">statement.pdf</span>
+                  <span id="fileSize" class="file-size">0 KB</span>
+                </div>
+              </div>
+              <button id="parseBtn" class="btn btn-accent" onclick="uploadAndParse()">
+                <i data-lucide="cpu"></i> Parse &amp; Validate Statement
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- SOURCE 2: BANK SMS -->
+      <div id="sourceSmsContainer" class="hidden">
+        <section class="upload-section">
+          <div class="dropzone-card" style="cursor: default; padding: 28px 32px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h3 style="margin: 0; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                  <i data-lucide="message-square" style="color: var(--primary-purple);"></i> Bank SMS Ingestion
+                </h3>
+                <p style="margin: 4px 0 0; font-size: 13px; color: var(--text-muted);">
+                  Paste or share your bank transaction message here. Respects iOS/Android security restrictions.
+                </p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge" style="background: rgba(124, 58, 237, 0.15); color: #A78BFA; font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 12px;">
+                  Format: Bank Muscat
+                </span>
+              </div>
+            </div>
+
+            <!-- Quick One-Click Sample Buttons -->
+            <div style="margin-bottom: 16px;">
+              <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 8px;">One-Click Test Samples:</span>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-secondary btn-sm" onclick="loadSmsSample('debit')">
+                  <i data-lucide="shopping-bag" style="width: 14px;"></i> Try Bank Muscat POS/Debit SMS
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="loadSmsSample('credit')">
+                  <i data-lucide="arrow-down-left" style="width: 14px;"></i> Try Bank Muscat Transfer/Credit SMS
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="loadSmsSample('nbo')">
+                  <i data-lucide="credit-card" style="width: 14px;"></i> Try NBO Debit Alert
+                </button>
+              </div>
+            </div>
+
+            <!-- Input Box -->
+            <div class="form-group" style="margin-bottom: 20px;">
+              <textarea id="smsInput" class="form-input" rows="4" style="width: 100%; font-family: monospace; font-size: 13px; line-height: 1.5; padding: 14px; border-radius: var(--radius-md); resize: vertical;" placeholder="Paste Bank Muscat SMS message here (e.g. Your A/C ...1234 has been debited by OMR 28.655 on 06-09-2026 for POS purchase at LULU HYPERMARKET. Avail Bal: OMR 40.992.)" oninput="handleSmsInput()"></textarea>
+            </div>
+
+            <!-- Real-Time Transaction Card Preview -->
+            <div id="smsPreviewCard" class="hidden" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="badge" id="smsCardBank" style="background: rgba(124, 58, 237, 0.2); color: #A78BFA; font-weight: 700; padding: 4px 10px; border-radius: 6px;">Bank Muscat</span>
+                  <span class="badge" id="smsCardDirection" style="background: rgba(239, 68, 68, 0.15); color: var(--rose-red); font-weight: 700; padding: 4px 10px; border-radius: 6px;">DEBIT</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span id="smsCardConfidence" style="font-size: 12px; font-weight: 700; color: var(--emerald-green);">100% Valid</span>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                <div>
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Amount</div>
+                  <div id="smsCardAmount" style="font-size: 20px; font-weight: 800; color: var(--rose-red); margin-top: 2px;">-28.655 OMR</div>
+                </div>
+                <div>
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Merchant / Narration</div>
+                  <div id="smsCardMerchant" style="font-size: 15px; font-weight: 700; margin-top: 4px;">LULU HYPERMARKET</div>
+                </div>
+                <div>
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Transaction Date</div>
+                  <div id="smsCardDate" style="font-size: 14px; font-weight: 600; margin-top: 4px;">06-09-2026</div>
+                </div>
+                <div>
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Available Balance</div>
+                  <div id="smsCardBalance" style="font-size: 14px; font-weight: 600; margin-top: 4px;">40.992 OMR</div>
+                </div>
+                <div>
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Auto-Categorization</div>
+                  <div id="smsCardCategory" style="font-size: 14px; font-weight: 700; color: #A78BFA; margin-top: 4px;">Food</div>
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px;">
+                <div id="smsCardValidationMsg" style="font-size: 12px; color: var(--emerald-green); font-weight: 500;">
+                  ✓ Validated Bank Muscat extraction ready to import.
+                </div>
+                <button id="btnConfirmSms" class="btn btn-success btn-lg" onclick="confirmNotification('sms')">
+                  <i data-lucide="database-zap"></i> Feed themarip.db
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </section>
+      </div>
+
+      <!-- SOURCE 3: BANK EMAIL / MAILBOX PULL -->
+      <div id="sourceEmailContainer" class="hidden">
+        <section class="upload-section">
+          <div class="dropzone-card" style="cursor: default; padding: 28px 32px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h3 style="margin: 0; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                  <i data-lucide="inbox" style="color: var(--primary-purple);"></i> Mailbox Email Pull &amp; Ingestion
+                </h3>
+                <p style="margin: 4px 0 0; font-size: 13px; color: var(--text-muted);">
+                  Pulls transaction emails directly from your Mailbox matching the Sender and Subject below, and ingests them into <code class="code-tag">themarip.db</code>.
+                </p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: var(--emerald-green); font-weight: 600; padding: 4px 10px; border-radius: 20px; font-size: 12px;">
+                  <span style="width: 6px; height: 6px; border-radius: 50%; background: #10B981; display: inline-block; margin-right: 4px;"></span> Automated Mailbox Reader
+                </span>
+              </div>
+            </div>
+
+            <!-- Email Search Filter Fields (As shown in user screenshot) -->
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; margin-bottom: 20px;">
+              <div style="font-size: 13px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="filter" style="width: 14px; color: var(--primary-purple);"></i> Email Search Filters
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Email Sender</label>
+                  <input type="text" id="emailSenderInput" class="form-input" value="NOREPLY@BANKMUSCAT.COM" placeholder="NOREPLY@BANKMUSCAT.COM">
+                </div>
+                <div class="form-group">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block;">Email Subject</label>
+                  <input type="text" id="emailSubjectInput" class="form-input" value="Account Transaction" placeholder="Account Transaction">
+                </div>
+              </div>
+            </div>
+
+            <!-- Zero-Password OAuth2 / Device Authentication Card (Option 3) -->
+            <div style="background: linear-gradient(135deg, rgba(124, 58, 237, 0.05), rgba(59, 130, 246, 0.05)); border: 1px solid rgba(124, 58, 237, 0.25); border-radius: var(--radius-md); padding: 20px; margin-bottom: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                <div>
+                  <div style="font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="shield-check" style="width: 18px; color: var(--emerald-green);"></i> Zero-Password Mailbox Access (OAuth 2.0 / Device Token)
+                  </div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                    Uses your device's connected account &amp; Face ID / Touch ID. No passwords are typed or stored.
+                  </div>
+                </div>
+                <div id="oauthConnectedBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: var(--emerald-green); font-size: 11px; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 6px;">
+                  <span style="width: 6px; height: 6px; border-radius: 50%; background: #10B981;"></span>
+                  <span id="oauthStatusText">Device Token Ready</span>
+                </div>
+              </div>
+
+              <!-- Quick Connect Buttons: Microsoft/Hotmail, Apple ID & Google Account -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+                <button type="button" class="btn btn-secondary" onclick="authenticateWithOAuth('microsoft')" id="btnAuthMicrosoft" style="padding: 10px 12px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; border: 1px solid rgba(0, 164, 239, 0.4); background: rgba(0, 164, 239, 0.08); font-size: 12px; font-weight: 700; color: #fff;">
+                  <svg style="width: 15px; height: 15px;" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+                  <span>Microsoft / Hotmail</span>
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="authenticateWithOAuth('apple')" id="btnAuthApple" style="padding: 10px 12px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; border-color: rgba(255,255,255,0.15); font-size: 12px; font-weight: 600;">
+                  <svg style="width: 15px; height: 15px; fill: currentColor;" viewBox="0 0 170 170"><path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.74 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.04-7.6-7.85-11.73-14.42-6.28-10.15-11.24-21.75-14.88-34.82-3.64-13.07-5.46-25.26-5.46-36.57 0-14.8 3.52-26.96 10.56-36.47 7.04-9.51 16.03-14.34 26.96-14.49 5.02 0 10.57 1.34 16.64 4.02 6.07 2.68 10.16 4.08 12.27 4.2 1.79 0 5.86-1.4 12.21-4.2 6.35-2.8 11.66-4.08 15.93-3.85 11.83.67 21.43 5.3 28.79 13.88-10.28 6.25-15.31 14.88-15.09 25.88.23 8.6 3.46 15.75 9.7 21.44 6.24 5.69 13.62 8.89 22.14 9.6-2.23 6.7-5.02 13.73-8.37 21.08zM119.22 33.64c0-7.37 2.62-14.33 7.85-20.88 5.23-6.55 11.61-10.74 19.14-12.57.89 7.82-1.39 14.93-6.84 21.32-5.45 6.4-12.16 10.45-20.15 12.13z"/></svg>
+                  <span>Apple (Face ID)</span>
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="authenticateWithOAuth('google')" id="btnAuthGoogle" style="padding: 10px 12px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; border-color: rgba(255,255,255,0.15); font-size: 12px; font-weight: 600;">
+                  <svg style="width: 15px; height: 15px;" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                  <span>Google</span>
+                </button>
+              </div>
+
+              <!-- Connected Account Info Bar -->
+              <div id="oauthAccountInfoBar" style="background: rgba(0,0,0,0.25); border-radius: 6px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-wrap: wrap; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <i data-lucide="mail" style="width: 15px; color: #00a4ef;"></i>
+                  <span style="color: var(--text-muted);">Connected Mailbox:</span>
+                  <input type="email" id="oauthConnectedEmailInput" value="albahri_27@hotmail.com" onchange="updateConnectedEmail(this.value)" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; font-weight: 700; padding: 3px 8px; font-size: 12px; font-family: monospace; width: 200px;">
+                  <span class="badge" style="background: rgba(0, 164, 239, 0.15); color: #00a4ef; font-size: 10px; padding: 2px 6px;">Hotmail / Outlook OAuth</span>
+                </div>
+                <div style="color: var(--text-muted); font-size: 11px;">
+                  <i data-lucide="lock" style="width: 11px; vertical-align: middle;"></i> Device Session Token Active
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Button: Step 1 - Pull & Inspect Emails -->
+            <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px;">
+              <button id="btnPullMailbox" class="btn btn-primary btn-lg" onclick="pullEmailsFromMailbox()" style="flex: 1; justify-content: center; padding: 14px; font-size: 15px; font-weight: 700;">
+                <i data-lucide="inbox"></i> Step 1: Pull &amp; Inspect Emails from Mailbox
+              </button>
+            </div>
+
+            <!-- Results Section: Step 2 - Review, Validate & Push to themarip.db -->
+            <div id="mailboxResultsContainer" class="hidden" style="margin-top: 20px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 14px;">
+                <div>
+                  <h4 style="margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="mail-search" style="color: var(--primary-purple); width: 18px;"></i> Pulled Emails Inspection &amp; Validation
+                  </h4>
+                  <p style="margin: 4px 0 0; font-size: 12px; color: var(--text-muted);">
+                    Review extracted transaction details below. Verify merchant, amount, balance, and category before pushing.
+                  </p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span id="mailboxResultsBadge" class="badge badge-success">3 Pulled Emails</span>
+                  <button id="btnPushToDb" class="btn btn-success btn-lg" onclick="pushPulledEmailsToDb()" style="padding: 10px 18px; font-size: 13px; font-weight: 700;">
+                    <i data-lucide="database-zap"></i> Step 2: Push Validated to themarip.db
+                  </button>
+                </div>
+              </div>
+
+              <!-- List of Pulled Emails / Transactions for Inspection -->
+              <div id="mailboxTransactionsList" style="display: flex; flex-direction: column; gap: 12px;">
+                <!-- Rendered by JS -->
+              </div>
+            </div>
+
+          </div>
+        </section>
+      </div>
+
+
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <p id="loadingMsg">Parsing Bank Muscat PDF layout...</p>
+    </div>
+
+    <!-- Alert Banner -->
+    <div id="alertBanner" class="alert-banner hidden">
+      <i data-lucide="alert-circle" id="alertIcon"></i>
+      <span id="alertText"></span>
+    </div>
+
+    <!-- Parsed Preview Section -->
+    <section id="previewSection" class="preview-section hidden">
+      <div class="preview-card">
+
+        <!-- Card Header -->
+        <div class="card-header">
+          <div>
+            <h2>Statement Inspection & Mapping</h2>
+            <p class="card-sub">Target Table: <code class="code-tag">PfmTransactions</code> | Database: <code class="code-tag">themarip.db</code></p>
+          </div>
+          <button id="confirmBtn" class="btn btn-success btn-lg" onclick="confirmImport()">
+            <i data-lucide="database-zap"></i> Feed themarip.db
+          </button>
+        </div>
+
+        <!-- Metric Badges -->
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <span class="metric-label">Account No</span>
+            <span class="metric-value" id="hdrAccount">--</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Statement Cycle</span>
+            <span class="metric-value" id="hdrCycle">--</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Total Transactions</span>
+            <span class="metric-value highlight" id="hdrTotal">0</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Extraction Quality</span>
+            <span class="metric-value success" id="hdrExtractionQuality">100% PASS</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Balance Continuity</span>
+            <span class="metric-value success" id="hdrValidation">100% Valid</span>
+          </div>
+        </div>
+
+        <!-- Transactions Table -->
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="min-width: 90px;">Post Date</th>
+                <th style="min-width: 90px;">Value Date</th>
+                <th style="min-width: 250px;">Narration / Description</th>
+                <th style="min-width: 130px;">Amount & Direction</th>
+                <th style="min-width: 100px;">Balance (OMR)</th>
+                <th style="min-width: 180px;">Categorization</th>
+                <th style="min-width: 140px;">Extraction Integrity</th>
+              </tr>
+            </thead>
+            <tbody id="txTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Live Database Summary Footer -->
+    <section class="live-db-section">
+      <div class="live-db-card">
+        <div class="db-info">
+          <i data-lucide="database" class="db-icon"></i>
+          <div>
+            <h4>Live <code class="code-tag">themarip.db</code> Status</h4>
+            <p><span id="dbTxCount">--</span> total transactions stored in <code class="code-tag">PfmTransactions</code> table</p>
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="fetchLiveDbCount()">
+          <i data-lucide="refresh-cw"></i> Refresh Status
+        </button>
+      </div>
+    </section>
+    </div> <!-- END PAGE 1 -->
+
+    <!-- PAGE 2: CATEGORY HIERARCHY -->
+    <div id="pageCategories" class="hidden">
+      <section class="hero-section" style="text-align: left; margin-bottom: 24px;">
+        <h1>Category Hierarchy</h1>
+        <p class="subtitle" style="margin: 0;">Manage categories and subcategories read directly from <code class="code-tag">themarip.db</code> (<code class="code-tag">PfmCategories</code> & <code class="code-tag">PfmSubcategories</code> tables).</p>
+      </section>
+
+      <div class="categories-card">
+        <div class="card-header">
+          <div>
+            <h2>Category Hierarchy Tree</h2>
+            <p class="card-sub">Loaded from <code class="code-tag">themarip.db</code></p>
+          </div>
+          <button class="btn btn-secondary" onclick="loadCategoryHierarchyPage()">
+            <i data-lucide="refresh-cw"></i> Refresh Hierarchy
+          </button>
+        </div>
+
+        <div id="categoryHierarchyContainer" class="category-hierarchy-container">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+    </div> <!-- END PAGE 2 -->
+
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- AUTH MODAL (SIGN IN / SIGN UP)                               -->
+  <!-- ============================================================ -->
+  <div id="authModal" class="modal-overlay hidden">
+    <div class="auth-modal-card">
+      <div class="auth-modal-header">
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Sign In</button>
+          <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Create Account</button>
+        </div>
+        <button class="modal-close-btn" onclick="closeAuthModal()"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="auth-modal-body">
+        <div id="authAlert" class="alert-banner error hidden" style="margin-bottom:16px;"></div>
+
+        <!-- LOGIN FORM -->
+        <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="loginEmail" required placeholder="user@example.com" class="form-input">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPassword" required placeholder="••••••••••••" class="form-input">
+          </div>
+          <button type="submit" class="btn-primary-action" id="btnLoginSubmit">
+            <i data-lucide="log-in"></i> Sign In to Account
+          </button>
+        </form>
+
+        <!-- REGISTER FORM -->
+        <form id="registerForm" class="hidden" onsubmit="handleRegisterSubmit(event)">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="regFullName" required placeholder="e.g. Salim Al Hinai" class="form-input">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="regEmail" required placeholder="user@example.com" class="form-input">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="regPassword" required minlength="6" placeholder="At least 6 characters" class="form-input">
+          </div>
+          <div class="form-group">
+            <label>Select Your Bank / PSP</label>
+            <select id="regBank" class="form-input" style="cursor:pointer;">
+              <optgroup label="Oman Commercial Banks">
+                <option value="Bank Muscat" selected>Bank Muscat</option>
+                <option value="National Bank of Oman">National Bank of Oman (NBO)</option>
+                <option value="Bank Dhofar">Bank Dhofar</option>
+                <option value="Sohar International">Sohar International</option>
+                <option value="Oman Arab Bank">Oman Arab Bank (OAB)</option>
+                <option value="Ahli Bank">Ahli Bank</option>
+              </optgroup>
+              <optgroup label="Islamic Banks & Windows">
+                <option value="Bank Nizwa">Bank Nizwa</option>
+                <option value="Alizz Islamic Bank">Alizz Islamic Bank</option>
+                <option value="Meethaq Islamic Banking">Meethaq Islamic Banking</option>
+                <option value="Muzn Islamic Banking">Muzn (NBO)</option>
+                <option value="Maisarah Islamic Banking">Maisarah (Bank Dhofar)</option>
+              </optgroup>
+              <optgroup label="Payment Service Providers (PSPs) & Wallets">
+                <option value="Thawani Pay">Thawani Pay</option>
+                <option value="OmPay">OmPay</option>
+                <option value="eFloos">eFloos Wallet</option>
+                <option value="Paymob Oman">Paymob Oman</option>
+              </optgroup>
+            </select>
+          </div>
+          <button type="submit" class="btn-primary-action" id="btnRegisterSubmit">
+            <i data-lucide="user-plus"></i> Create Isolated Profile
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

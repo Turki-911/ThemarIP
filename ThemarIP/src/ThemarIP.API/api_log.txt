@@ -1,0 +1,173 @@
+Using launch settings from /Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.API/Properties/launchSettings.json...
+Building...
+/Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.API/ThemarIP.API.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.Infrastructure/ThemarIP.Infrastructure.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q [/Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.API/ThemarIP.API.csproj]
+/Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.API/ThemarIP.API.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.Infrastructure/ThemarIP.Infrastructure.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+warn: Microsoft.EntityFrameworkCore.Model.Validation[10625]
+      The foreign key property 'Transaction.UserId1' was created in shadow state because a conflicting property with the simple name 'UserId' exists in the entity type, but is either not mapped, is already used for another relationship, or is incompatible with the associated primary key type. See https://aka.ms/efcore-relationships for information on mapping relationships in EF Core.
+info: Microsoft.EntityFrameworkCore.Migrations[20411]
+      Acquiring an exclusive lock for migration application. See https://aka.ms/efcore-docs-migrations-lock for more information if this takes too long.
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (4ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*) FROM "sqlite_master" WHERE "name" = '__EFMigrationsLock' AND "type" = 'table';
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      INSERT OR IGNORE INTO "__EFMigrationsLock"("Id", "Timestamp") VALUES(1, '2026-07-31 18:39:19.666862+00:00');
+      SELECT changes();
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+          "MigrationId" TEXT NOT NULL CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY,
+          "ProductVersion" TEXT NOT NULL
+      );
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT COUNT(*) FROM "sqlite_master" WHERE "name" = '__EFMigrationsHistory' AND "type" = 'table';
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT "MigrationId", "ProductVersion"
+      FROM "__EFMigrationsHistory"
+      ORDER BY "MigrationId";
+info: Microsoft.EntityFrameworkCore.Migrations[20405]
+      No migrations were applied. The database is already up to date.
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      DELETE FROM "__EFMigrationsLock";
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "Users" AS "u")
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "CategoryRules" AS "c")
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5267
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: /Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.API
+warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3]
+      Failed to determine the https port for redirect.
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (1ms) [Parameters=[@request_Email='?' (Size = 23)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "Users" AS "u"
+          WHERE "u"."Email" = @request_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?', @p2='?' (DbType = DateTimeOffset), @p3='?' (Size = 23), @p4='?' (Size = 10), @p5='?' (Size = 10), @p6='?' (Size = 60), @p7='?' (Size = 4), @p8='?' (Size = 7), @p9='?' (DbType = DateTimeOffset)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Users" ("Id", "AccountNumber", "CreatedAt", "Email", "FullName", "KycStatus", "PasswordHash", "Role", "Status", "UpdatedAt")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTimeOffset), @p2='?' (DbType = DateTimeOffset), @p3='?' (DbType = Decimal), @p4='?' (DbType = DateTimeOffset), @p5='?' (Size = 6), @p6='?' (Size = 4), @p7='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Subscriptions" ("Id", "CreatedAt", "EndDate", "Price", "StartDate", "Status", "Tier", "UserId")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@request_Email='?' (Size = 23)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "Users" AS "u"
+          WHERE "u"."Email" = @request_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?', @p2='?' (DbType = DateTimeOffset), @p3='?' (Size = 23), @p4='?' (Size = 10), @p5='?' (Size = 10), @p6='?' (Size = 60), @p7='?' (Size = 4), @p8='?' (Size = 7), @p9='?' (DbType = DateTimeOffset)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Users" ("Id", "AccountNumber", "CreatedAt", "Email", "FullName", "KycStatus", "PasswordHash", "Role", "Status", "UpdatedAt")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTimeOffset), @p2='?' (DbType = DateTimeOffset), @p3='?' (DbType = Decimal), @p4='?' (DbType = DateTimeOffset), @p5='?' (Size = 6), @p6='?' (Size = 4), @p7='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Subscriptions" ("Id", "CreatedAt", "EndDate", "Price", "StartDate", "Status", "Tier", "UserId")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@request_Email='?' (Size = 21)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "Users" AS "u"
+          WHERE "u"."Email" = @request_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?', @p2='?' (DbType = DateTimeOffset), @p3='?' (Size = 21), @p4='?' (Size = 9), @p5='?' (Size = 10), @p6='?' (Size = 60), @p7='?' (Size = 4), @p8='?' (Size = 7), @p9='?' (DbType = DateTimeOffset)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Users" ("Id", "AccountNumber", "CreatedAt", "Email", "FullName", "KycStatus", "PasswordHash", "Role", "Status", "UpdatedAt")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTimeOffset), @p2='?' (DbType = DateTimeOffset), @p3='?' (DbType = Decimal), @p4='?' (DbType = DateTimeOffset), @p5='?' (Size = 6), @p6='?' (Size = 4), @p7='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Subscriptions" ("Id", "CreatedAt", "EndDate", "Price", "StartDate", "Status", "Tier", "UserId")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@request_Email='?' (Size = 27)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "Users" AS "u"
+          WHERE "u"."Email" = @request_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?', @p2='?' (DbType = DateTimeOffset), @p3='?' (Size = 27), @p4='?', @p5='?' (Size = 10), @p6='?' (Size = 60), @p7='?' (Size = 4), @p8='?' (Size = 7), @p9='?' (DbType = DateTimeOffset)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Users" ("Id", "AccountNumber", "CreatedAt", "Email", "FullName", "KycStatus", "PasswordHash", "Role", "Status", "UpdatedAt")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTimeOffset), @p2='?' (DbType = DateTimeOffset), @p3='?' (DbType = Decimal), @p4='?' (DbType = DateTimeOffset), @p5='?' (Size = 6), @p6='?' (Size = 4), @p7='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Subscriptions" ("Id", "CreatedAt", "EndDate", "Price", "StartDate", "Status", "Tier", "UserId")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@request_Email='?' (Size = 23)], CommandType='Text', CommandTimeout='30']
+      SELECT "u"."Id", "u"."AccountNumber", "u"."CreatedAt", "u"."Email", "u"."FullName", "u"."KycStatus", "u"."PasswordHash", "u"."Role", "u"."Status", "u"."UpdatedAt"
+      FROM "Users" AS "u"
+      WHERE "u"."Email" = @request_Email
+      LIMIT 1
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@request_Email='?' (Size = 25)], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "Users" AS "u"
+          WHERE "u"."Email" = @request_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?', @p2='?' (DbType = DateTimeOffset), @p3='?' (Size = 25), @p4='?' (Size = 8), @p5='?' (Size = 10), @p6='?' (Size = 60), @p7='?' (Size = 4), @p8='?' (Size = 7), @p9='?' (DbType = DateTimeOffset)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Users" ("Id", "AccountNumber", "CreatedAt", "Email", "FullName", "KycStatus", "PasswordHash", "Role", "Status", "UpdatedAt")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTimeOffset), @p2='?' (DbType = DateTimeOffset), @p3='?' (DbType = Decimal), @p4='?' (DbType = DateTimeOffset), @p5='?' (Size = 6), @p6='?' (Size = 4), @p7='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Subscriptions" ("Id", "CreatedAt", "EndDate", "Price", "StartDate", "Status", "Tier", "UserId")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@request_Email='?'], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "Users" AS "u"
+          WHERE "u"."Email" = @request_Email)
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?', @p2='?' (DbType = DateTimeOffset), @p3='?', @p4='?' (Size = 4), @p5='?' (Size = 10), @p6='?' (Size = 60), @p7='?' (Size = 4), @p8='?' (Size = 7), @p9='?' (DbType = DateTimeOffset)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Users" ("Id", "AccountNumber", "CreatedAt", "Email", "FullName", "KycStatus", "PasswordHash", "Role", "Status", "UpdatedAt")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@p0='?' (DbType = Guid), @p1='?' (DbType = DateTimeOffset), @p2='?' (DbType = DateTimeOffset), @p3='?' (DbType = Decimal), @p4='?' (DbType = DateTimeOffset), @p5='?' (Size = 6), @p6='?' (Size = 4), @p7='?' (DbType = Guid)], CommandType='Text', CommandTimeout='30']
+      INSERT INTO "Subscriptions" ("Id", "CreatedAt", "EndDate", "Price", "StartDate", "Status", "Tier", "UserId")
+      VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7);
+info: Microsoft.EntityFrameworkCore.Database.Command[20101]
+      Executed DbCommand (0ms) [Parameters=[@request_Email='?'], CommandType='Text', CommandTimeout='30']
+      SELECT EXISTS (
+          SELECT 1
+          FROM "Users" AS "u"
+          WHERE "u"."Email" = @request_Email)
+fail: ThemarIP.API.Middleware.GlobalExceptionHandlingMiddleware[0]
+      An unhandled exception occurred: User with this email already exists.
+      System.InvalidOperationException: User with this email already exists.
+         at ThemarIP.Application.Services.AuthService.RegisterAsync(RegisterRequestDto request, CancellationToken cancellationToken) in /Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.Application/Services/AuthService.cs:line 40
+         at ThemarIP.API.Controllers.AuthController.Register(RegisterRequestDto request, CancellationToken cancellationToken) in /Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.API/Controllers/AuthController.cs:line 28
+         at lambda_method15(Closure, Object)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.AwaitableObjectResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.InvokeInnerFilterAsync()
+      --- End of stack trace from previous location ---
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+         at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)
+         at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+         at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)
+         at Swashbuckle.AspNetCore.SwaggerUI.SwaggerUIMiddleware.Invoke(HttpContext httpContext)
+         at Swashbuckle.AspNetCore.Swagger.SwaggerMiddleware.Invoke(HttpContext httpContext, ISwaggerProvider swaggerProvider)
+         at ThemarIP.API.Middleware.GlobalExceptionHandlingMiddleware.InvokeAsync(HttpContext context) in /Users/turki/Desktop/NBO Sandbox/Themar Card Managment/ThemarIP/src/ThemarIP.API/Middleware/GlobalExceptionHandlingMiddleware.cs:line 25

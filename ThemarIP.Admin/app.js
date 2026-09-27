@@ -5,6 +5,12 @@
 
 'use strict';
 
+// Dynamic API Base URL for local & production tunnel hosting
+const THEMAR_API_BASE = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+  ? 'https://johnson-reception-sparc-titanium.trycloudflare.com/api'
+  : 'http://localhost:5267/api';
+
+
 // Pre-SEED merchant name lookup (avoids circular reference inside IIFE)
 const _MERCHANT_NAMES = {
   'm-lulu':'Lulu Hypermarket','m-carrefour':'Carrefour','m-starbucks':'Starbucks',
@@ -501,8 +507,8 @@ let _dbCategoryRules = [];   // live from themarip.db CategoryRules table
 async function loadCategoryRulesFromDb() {
   try {
     const [rulesRes, catRes] = await Promise.all([
-      fetch('http://localhost:5267/api/statements/category-rules'),
-      fetch('http://localhost:5267/api/statements/categories-hierarchy')
+      fetch(THEMAR_API_BASE + '/statements/category-rules'),
+      fetch(THEMAR_API_BASE + '/statements/categories-hierarchy')
     ]);
 
     if (rulesRes.ok) {
@@ -546,7 +552,7 @@ async function loadCategoryRulesFromDb() {
 
 async function loadMerchantsFromDb() {
   try {
-    const res = await fetch('http://localhost:5267/api/statements/merchants');
+    const res = await fetch(THEMAR_API_BASE + '/statements/merchants');
     if (res.ok) {
       const dbMerchants = await res.json();
       if (Array.isArray(dbMerchants) && dbMerchants.length > 0) {
@@ -678,7 +684,7 @@ function categorizeNarration(narration) {
 
 async function loadRealTransactions() {
   try {
-    const res = await fetch('http://localhost:5267/api/statements/transactions');
+    const res = await fetch(THEMAR_API_BASE + '/statements/transactions');
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -1184,7 +1190,7 @@ const Categories = {
         const cat = state.categories.find(c=>c.id===catId);
         if (cat && confirm(`Are you sure you want to delete category "${cat.name}" from themarip.db?`)) {
           try {
-            const res = await fetch(`http://localhost:5267/api/statements/categories/${catId}`, { method: 'DELETE' });
+            const res = await fetch(`${THEMAR_API_BASE}/statements/categories/${catId}`, { method: 'DELETE' });
             if (res.ok) {
               await loadCategoryRulesFromDb();
               Categories.render();
@@ -1200,7 +1206,7 @@ const Categories = {
         const sub = state.subcategories.find(s=>s.id===subId);
         if (sub && confirm(`Are you sure you want to delete subcategory "${sub.name}" from themarip.db?`)) {
           try {
-            const res = await fetch(`http://localhost:5267/api/statements/categories/${subId}`, { method: 'DELETE' });
+            const res = await fetch(`${THEMAR_API_BASE}/statements/categories/${subId}`, { method: 'DELETE' });
             if (res.ok) {
               await loadCategoryRulesFromDb();
               Categories.render();
@@ -1240,7 +1246,7 @@ const Categories = {
         if (sub) { sub.name=name; Toast.success(`Subcategory updated.`); }
       } else {
         try {
-          const res = await fetch('http://localhost:5267/api/statements/categories', {
+          const res = await fetch(THEMAR_API_BASE + '/statements/categories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ parentId: parentId, name: name, icon: 'corner-down-right' })
@@ -1262,7 +1268,7 @@ const Categories = {
         try {
           const colors = ['#10B981','#3B82F6','#8B5CF6','#F59E0B','#F43F5E','#06B6D4','#F97316'];
           const color = colors[state.categories.length % colors.length];
-          const res = await fetch('http://localhost:5267/api/statements/categories', {
+          const res = await fetch(THEMAR_API_BASE + '/statements/categories', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ parentId: null, name: name, icon: icon, color: color })
@@ -1575,7 +1581,7 @@ const Merchants = {
       if (m) {
         const nextStatus = m.status === 'active' ? 'inactive' : 'active';
         try {
-          const res = await fetch(`http://localhost:5267/api/statements/merchants/${m.id}/toggle`, {
+          const res = await fetch(`${THEMAR_API_BASE}/statements/merchants/${m.id}/toggle`, {
             method: 'PATCH'
           });
           if (res.ok) {
@@ -1666,7 +1672,7 @@ const Merchants = {
     try {
       if (id && id.length > 10 && !id.startsWith('m-')) {
         // Existing DB merchant (GUID)
-        const res = await fetch(`http://localhost:5267/api/statements/merchants/${id}`, {
+        const res = await fetch(`${THEMAR_API_BASE}/statements/merchants/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -1681,7 +1687,7 @@ const Merchants = {
         Toast.success(`Merchant "${name}" updated and saved to themarip.db!`);
       } else {
         // New merchant or client-only mock
-        const res = await fetch('http://localhost:5267/api/statements/merchants', {
+        const res = await fetch(THEMAR_API_BASE + '/statements/merchants', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -2207,7 +2213,7 @@ const Users = {
 
   async load() {
     try {
-      const res = await fetch('http://localhost:5267/api/statements/users');
+      const res = await fetch(THEMAR_API_BASE + '/statements/users');
       if (res.ok) {
         this._users = await res.json();
         const badge = document.getElementById('nav-users-count');
@@ -2277,7 +2283,7 @@ const Users = {
         const current = (btn.dataset.currentStatus || '').toLowerCase();
         const newStatus = (current === 'approved') ? 'Rejected' : 'Approved';
         try {
-          const res = await fetch(`http://localhost:5267/api/statements/users/${userId}/status`, {
+          const res = await fetch(`${THEMAR_API_BASE}/statements/users/${userId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: newStatus })

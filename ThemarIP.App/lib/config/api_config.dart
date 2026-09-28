@@ -5,7 +5,7 @@ class ApiConfig {
   // Default Mac LAN IP address (detected on en0 for iPhone Wi-Fi/Hotspot)
   static const String defaultLanHost = '172.20.10.5';
   static const String livePublicApiUrl =
-      'https://reliance-romantic-henry-cdna.trycloudflare.com/api';
+      'https://then-eyes-comm-dicke.trycloudflare.com/api';
   static String? _customHost;
 
   static const String _prefKeyHost = 'themarip_custom_api_host';
@@ -43,6 +43,10 @@ class ApiConfig {
   static String get activeHost {
     if (_customHost != null && _customHost!.isNotEmpty) {
       return _customHost!;
+    }
+    // Production release builds (shared APK, online Web) always use live public backend
+    if (kReleaseMode) {
+      return livePublicApiUrl;
     }
     if (kIsWeb) {
       final host = Uri.base.host;

@@ -5,7 +5,7 @@ class ApiConfig {
   // Default Mac LAN IP address (detected on en0 for iPhone Wi-Fi/Hotspot)
   static const String defaultLanHost = '172.20.10.5';
   static const String livePublicApiUrl =
-      'https://johnson-reception-sparc-titanium.trycloudflare.com/api';
+      'https://reliance-romantic-henry-cdna.trycloudflare.com/api';
   static String? _customHost;
 
   static const String _prefKeyHost = 'themarip_custom_api_host';

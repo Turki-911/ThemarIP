@@ -8,6 +8,133 @@ import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 
+class LocalBank {
+  final String code;
+  final String nameEn;
+  final String nameAr;
+  final String shortName;
+  final Color primaryColor;
+  final Color secondaryColor;
+  final Color accentColor;
+  final String formatDescription;
+  final String badgeText;
+  final bool isSupported;
+  final IconData defaultIcon;
+
+  const LocalBank({
+    required this.code,
+    required this.nameEn,
+    required this.nameAr,
+    required this.shortName,
+    required this.primaryColor,
+    required this.secondaryColor,
+    required this.accentColor,
+    required this.formatDescription,
+    required this.badgeText,
+    this.isSupported = true,
+    required this.defaultIcon,
+  });
+}
+
+const List<LocalBank> _localBanks = [
+  LocalBank(
+    code: 'BANK_MUSCAT',
+    nameEn: 'Bank Muscat',
+    nameAr: 'بنك مسقط',
+    shortName: 'BM',
+    primaryColor: Color(0xFFC41230),
+    secondaryColor: Color(0xFF8B0000),
+    accentColor: Color(0xFFFFD700),
+    formatDescription: 'Official Multi-page Account & Card Statements (.pdf)',
+    badgeText: 'Active Parser',
+    defaultIcon: Icons.account_balance,
+  ),
+  LocalBank(
+    code: 'NBO',
+    nameEn: 'National Bank of Oman',
+    nameAr: 'البنك الوطني العماني',
+    shortName: 'NBO',
+    primaryColor: Color(0xFF002B49),
+    secondaryColor: Color(0xFF0A3D62),
+    accentColor: Color(0xFFD4AF37),
+    formatDescription: 'Retail & Corporate Account Statements (.pdf)',
+    badgeText: 'Active / Sandbox',
+    defaultIcon: Icons.sailing,
+  ),
+  LocalBank(
+    code: 'BANK_DHOFAR',
+    nameEn: 'Bank Dhofar',
+    nameAr: 'بنك ظفار',
+    shortName: 'BD',
+    primaryColor: Color(0xFF007A3D),
+    secondaryColor: Color(0xFF004D26),
+    accentColor: Color(0xFFE5A823),
+    formatDescription: 'Dhofar e-Statement Multi-page PDF Format',
+    badgeText: 'Format Ready',
+    defaultIcon: Icons.waves,
+  ),
+  LocalBank(
+    code: 'OAB',
+    nameEn: 'Oman Arab Bank',
+    nameAr: 'بنك عمان العربي',
+    shortName: 'OAB',
+    primaryColor: Color(0xFF004B87),
+    secondaryColor: Color(0xFF002D62),
+    accentColor: Color(0xFFEF4444),
+    formatDescription: 'OAB Digital Statement & Summary Tables (.pdf)',
+    badgeText: 'Format Ready',
+    defaultIcon: Icons.shield,
+  ),
+  LocalBank(
+    code: 'SOHAR_INTL',
+    nameEn: 'Sohar International',
+    nameAr: 'صحار الدولي',
+    shortName: 'SI',
+    primaryColor: Color(0xFFE11D48),
+    secondaryColor: Color(0xFF9F1239),
+    accentColor: Color(0xFFF97316),
+    formatDescription: 'Sohar International e-Statement Format (.pdf)',
+    badgeText: 'Format Ready',
+    defaultIcon: Icons.diamond_outlined,
+  ),
+  LocalBank(
+    code: 'AHLI_BANK',
+    nameEn: 'Ahli Bank Oman',
+    nameAr: 'البنك الأهلي',
+    shortName: 'AB',
+    primaryColor: Color(0xFF70001E),
+    secondaryColor: Color(0xFF4A0014),
+    accentColor: Color(0xFF38BDF8),
+    formatDescription: 'Ahli Bank Standard e-Statement (.pdf)',
+    badgeText: 'Format Ready',
+    defaultIcon: Icons.security,
+  ),
+  LocalBank(
+    code: 'BANK_NIZWA',
+    nameEn: 'Bank Nizwa',
+    nameAr: 'بنك نزوى',
+    shortName: 'BN',
+    primaryColor: Color(0xFF006633),
+    secondaryColor: Color(0xFF00381C),
+    accentColor: Color(0xFF10B981),
+    formatDescription: 'Nizwa Islamic Account Statement (.pdf)',
+    badgeText: 'Islamic Banking',
+    defaultIcon: Icons.auto_awesome,
+  ),
+  LocalBank(
+    code: 'ALIZZ_ISLAMIC',
+    nameEn: 'Alizz Islamic Bank',
+    nameAr: 'بنك العز الإسلامي',
+    shortName: 'AIB',
+    primaryColor: Color(0xFF0284C7),
+    secondaryColor: Color(0xFF0369A1),
+    accentColor: Color(0xFFF59E0B),
+    formatDescription: 'Alizz Islamic Finance & Card Statement (.pdf)',
+    badgeText: 'Islamic Banking',
+    defaultIcon: Icons.stars_rounded,
+  ),
+];
+
 class BmpfMainScreen extends StatefulWidget {
   final int initialPageIndex;
 
@@ -25,6 +152,9 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   // Page switcher: 0 = Ingestion/Extractor (/upload), 1 = Category Hierarchy (/hierarchy or /categories)
   int _selectedPageIndex = 0;
+
+  // Selected Local Bank for statement parsing format
+  LocalBank _selectedBank = _localBanks[0];
 
   UserModel? _currentUser;
   int _dbTxCount = 0;
@@ -121,8 +251,16 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   }
 
   // ============================================================
-  // PDF PARSER & CONFIRM METHODS
+  // BANK SELECTION & STATEMENT PARSER METHODS
   // ============================================================
+  void _onSelectBank(LocalBank bank) {
+    if (_selectedBank.code == bank.code) return;
+    setState(() {
+      _selectedBank = bank;
+      _pdfParseResult = null; // Reset previous parse for new bank format
+    });
+  }
+
   Future<void> _pickPdf() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -139,20 +277,21 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   Future<void> _parsePdf() async {
     if (_selectedPdfFile == null || _selectedPdfFile!.bytes == null) {
-      _showToast('Please select a valid Bank Muscat PDF statement', isError: true);
+      _showToast('Please select a valid ${_selectedBank.nameEn} PDF statement', isError: true);
       return;
     }
-    _showLoading('Parsing Bank Muscat PDF layout & extracting transactions...');
+    _showLoading('Parsing ${_selectedBank.nameEn} PDF layout & extracting transactions...');
     try {
       final res = await _apiService.parsePdfStatement(
         _selectedPdfFile!.bytes!,
         _selectedPdfFile!.name,
+        bankCode: _selectedBank.code,
       );
       _hideLoading();
       setState(() {
         _pdfParseResult = BmpfParseResult.fromJson(res);
       });
-      _showToast('Successfully extracted ${_pdfParseResult!.transactions.length} transactions.');
+      _showToast('Successfully extracted ${_pdfParseResult!.transactions.length} transactions for ${_selectedBank.nameEn}.');
     } catch (e) {
       _hideLoading();
       _showToast('Failed to parse statement: $e', isError: true);
@@ -161,15 +300,19 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   Future<void> _confirmPdfImport() async {
     if (_pdfParseResult == null) return;
-    _showLoading('Processing statement transactions...');
+    _showLoading('Processing ${_selectedBank.nameEn} statement transactions...');
     try {
+      final payload = Map<String, dynamic>.from(_pdfParseResult!.rawJson);
+      payload['bankCode'] = _selectedBank.code;
+      payload['bankName'] = _selectedBank.nameEn;
+
       final success = await _apiService.confirmPdfImport(
-        _pdfParseResult!.rawJson,
+        payload,
         userId: _currentUser?.id,
       );
       _hideLoading();
       if (success) {
-        _showToast('Statement successfully imported! Redirecting to Categorization...');
+        _showToast('${_selectedBank.nameEn} statement successfully imported! Redirecting to Categorization...');
         _fetchLiveDbCount();
         setState(() {
           _selectedPageIndex = 1;
@@ -294,14 +437,32 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text(
-                'BMPF',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
+            children: [
+              const Text(
+                'THEMAR PFM',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
               ),
-              Text(
-                'BANK MUSCAT PFM EXTRACTOR',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8), letterSpacing: 0.8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'MULTI-BANK EXTRACTOR',
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8), letterSpacing: 0.8),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: _selectedBank.primaryColor.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: _selectedBank.accentColor.withValues(alpha: 0.7), width: 0.8),
+                    ),
+                    child: Text(
+                      _selectedBank.shortName,
+                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: _selectedBank.accentColor),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -414,63 +575,582 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   }
 
   // ============================================================
-  // PAGE 1: EXTRACTOR / INGESTION (PDF | SMS | EMAIL)
+  // PAGE 1: EXTRACTOR / INGESTION (PDF | LOCAL BANK SELECTION)
   // ============================================================
   Widget _buildExtractorPage() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       children: [
-        // Title
-        const Text(
-          'Bank Muscat Statement PDF',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+        // Title & Description Header
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.3)),
+              ),
+              child: const Icon(Icons.document_scanner_rounded, size: 26, color: Color(0xFF8B5CF6)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Bank Statement Extractor',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Select your local bank in Oman to configure the specialized parsing layout, then upload your official PDF account statement.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
-        const Text(
-          'Upload official Bank Muscat account statements (.pdf) to extract and ingest transactions.',
-          style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
+
+        // Step 1: Select Local Bank
+        _buildBankSelectionSection(),
+
+        const SizedBox(height: 28),
+
+        // Step 2: Upload Statement PDF for selected bank
         _buildPdfSourceSection(),
       ],
     );
   }
 
-  // 1. PDF SOURCE UI
+  // 1. BANK SELECTION UI (LOCAL BANKS IN OMAN)
+  Widget _buildBankSelectionSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.account_balance, color: Color(0xFF60A5FA), size: 16),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              '1. Select Local Bank (Oman)',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.2),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Text(
+                '${_localBanks.length} Banks Available',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Choose the bank that issued your statement to apply specialized format parsing & column rules.',
+          style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+        ),
+        const SizedBox(height: 14),
+
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final int crossAxisCount;
+            final double childAspectRatio;
+            if (constraints.maxWidth > 900) {
+              crossAxisCount = 4;
+              childAspectRatio = 1.7;
+            } else if (constraints.maxWidth > 600) {
+              crossAxisCount = 3;
+              childAspectRatio = 1.55;
+            } else {
+              crossAxisCount = 2;
+              childAspectRatio = 1.25;
+            }
+
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _localBanks.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: childAspectRatio,
+              ),
+              itemBuilder: (context, index) {
+                return _buildBankCard(_localBanks[index]);
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBankCard(LocalBank bank) {
+    final isSelected = _selectedBank.code == bank.code;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _onSelectBank(bank),
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? bank.primaryColor.withValues(alpha: 0.16)
+                : const Color(0xFF151D2C),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected
+                  ? bank.primaryColor
+                  : const Color(0xFF26324A),
+              width: isSelected ? 2.0 : 1.0,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: bank.primaryColor.withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Top row: Logo + Selected badge / status
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildBankLogo(bank, size: 38),
+                  const Spacer(),
+                  if (isSelected)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: bank.primaryColor,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: bank.primaryColor.withValues(alpha: 0.4),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.check, size: 11, color: Colors.white),
+                          SizedBox(width: 3),
+                          Text(
+                            'ACTIVE',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF334155)),
+                      ),
+                      child: Text(
+                        bank.shortName,
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+
+              // Bank Name in English & Arabic
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    bank.nameEn,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : const Color(0xFFF1F5F9),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    bank.nameAr,
+                    style: TextStyle(
+                      color: isSelected ? bank.accentColor : const Color(0xFF94A3B8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+
+              // Format tag
+              Row(
+                children: [
+                  Icon(
+                    Icons.picture_as_pdf_outlined,
+                    size: 11,
+                    color: isSelected ? bank.accentColor : const Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      bank.badgeText,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        color: isSelected ? const Color(0xFFE2E8F0) : const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBankLogo(LocalBank bank, {double size = 42}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            bank.primaryColor,
+            bank.secondaryColor,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(size * 0.28),
+        border: Border.all(
+          color: bank.accentColor.withValues(alpha: 0.6),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: bank.primaryColor.withValues(alpha: 0.35),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: _buildBankEmblemIcon(bank, size),
+      ),
+    );
+  }
+
+  Widget _buildBankEmblemIcon(LocalBank bank, double size) {
+    switch (bank.code) {
+      case 'BANK_MUSCAT':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.shield, color: bank.accentColor, size: size * 0.42),
+            Text(
+              'BM',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.22,
+                letterSpacing: -0.3,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+      case 'NBO':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.sailing_rounded, color: bank.accentColor, size: size * 0.42),
+            Text(
+              'NBO',
+              style: TextStyle(
+                color: bank.accentColor,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.22,
+                letterSpacing: 0.2,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+      case 'BANK_DHOFAR':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.waves, color: bank.accentColor, size: size * 0.42),
+            Text(
+              'BD',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.22,
+                letterSpacing: -0.3,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+      case 'OAB':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.account_balance, color: Colors.white, size: size * 0.42),
+            Text(
+              'OAB',
+              style: TextStyle(
+                color: bank.accentColor,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.22,
+                letterSpacing: 0.2,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+      case 'SOHAR_INTL':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.diamond_outlined, color: Colors.white, size: size * 0.42),
+            Text(
+              'SI',
+              style: TextStyle(
+                color: bank.accentColor,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.20,
+                letterSpacing: -0.2,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+      case 'AHLI_BANK':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.security, color: bank.accentColor, size: size * 0.42),
+            Text(
+              'AB',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.20,
+                letterSpacing: 0.2,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+      case 'BANK_NIZWA':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.auto_awesome, color: bank.accentColor, size: size * 0.42),
+            Text(
+              'BN',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.20,
+                letterSpacing: -0.2,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+      case 'ALIZZ_ISLAMIC':
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.stars_rounded, color: bank.accentColor, size: size * 0.42),
+            Text(
+              'AIB',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.18,
+                letterSpacing: -0.2,
+                height: 1.0,
+              ),
+            ),
+          ],
+        );
+      default:
+        return Icon(bank.defaultIcon, color: Colors.white, size: size * 0.45);
+    }
+  }
+
+  // 2. PDF SOURCE UI (TAILORED TO SELECTED BANK)
   Widget _buildPdfSourceSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Section Title
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: _selectedBank.primaryColor.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.cloud_upload_outlined, color: _selectedBank.accentColor, size: 16),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '2. Upload ${_selectedBank.nameEn} Statement',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.2),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
         Card(
           color: const Color(0xFF121824),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: Color(0xFF26324A)),
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: _selectedBank.primaryColor.withValues(alpha: 0.45)),
           ),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                const Icon(Icons.cloud_upload_outlined, size: 44, color: Color(0xFF7C3AED)),
-                const SizedBox(height: 12),
-                const Text(
-                  'Select Bank Muscat PDF Statement',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                // Selected Bank Header Summary
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF182234),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF26324A)),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildBankLogo(_selectedBank, size: 44),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _selectedBank.nameEn,
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _selectedBank.nameAr,
+                                  style: TextStyle(fontSize: 11, color: _selectedBank.accentColor, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _selectedBank.formatDescription,
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _selectedBank.primaryColor.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: _selectedBank.primaryColor.withValues(alpha: 0.5)),
+                        ),
+                        child: Text(
+                          _selectedBank.badgeText,
+                          style: TextStyle(
+                            color: _selectedBank.accentColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                Icon(Icons.upload_file_rounded, size: 46, color: _selectedBank.accentColor),
+                const SizedBox(height: 10),
+                Text(
+                  'Select ${_selectedBank.nameEn} Statement PDF',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Multi-page official Bank Muscat account statements (.pdf)',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                Text(
+                  'Upload official ${_selectedBank.nameEn} multi-page statement (.pdf) for automated extraction.',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: _pickPdf,
                   icon: const Icon(Icons.file_open, size: 18),
-                  label: Text(_selectedPdfFile != null ? 'Change File' : 'Choose PDF File'),
+                  label: Text(_selectedPdfFile != null ? 'Change File' : 'Choose ${_selectedBank.shortName} PDF File'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF7C3AED),
+                    backgroundColor: _selectedBank.primaryColor,
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
@@ -481,16 +1161,27 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E293B),
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF334155)),
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            _selectedPdfFile!.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13),
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedPdfFile!.name,
+                                style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Target Format: ${_selectedBank.nameEn} (${_selectedBank.code})',
+                                style: TextStyle(color: _selectedBank.accentColor, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ],
                           ),
                         ),
                         Text(
@@ -500,17 +1191,20 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: _parsePdf,
                       icon: const Icon(Icons.memory, size: 18),
-                      label: const Text('Parse & Validate Statement', style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: Text(
+                        'Parse & Validate ${_selectedBank.shortName} Statement',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF2563EB),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
@@ -523,12 +1217,12 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
         // PDF Preview Section
         if (_pdfParseResult != null) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Card(
             color: const Color(0xFF121824),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: Color(0xFF26324A)),
+              side: BorderSide(color: _selectedBank.primaryColor.withValues(alpha: 0.5)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -538,9 +1232,24 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Statement Inspection',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      Row(
+                        children: [
+                          _buildBankLogo(_selectedBank, size: 32),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_selectedBank.nameEn} Inspection',
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                              Text(
+                                'Profile: ${_selectedBank.code} Format',
+                                style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                       ElevatedButton.icon(
                         onPressed: _confirmPdfImport,
@@ -549,13 +1258,13 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF10B981),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
 
                   // Metrics Grid
                   Row(
@@ -564,7 +1273,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                       const SizedBox(width: 8),
                       _buildMetricBox('Quality', '${_pdfParseResult!.extractionConfidence}% PASS', const Color(0xFF10B981)),
                       const SizedBox(width: 8),
-                      _buildMetricBox('Account', _pdfParseResult!.header.accountNumber, const Color(0xFF60A5FA)),
+                      _buildMetricBox('Bank Target', _selectedBank.shortName, _selectedBank.accentColor),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -689,10 +1398,15 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           children: [
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('Category Hierarchy', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+              children: [
+                const Text('Category Hierarchy', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                 SizedBox(height: 2),
-                Text('Automated Financial Categorization', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                Text(
+                  _dbTxCount > 0
+                      ? 'Automated Financial Categorization • $_dbTxCount transactions'
+                      : 'Automated Financial Categorization',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
               ],
             ),
             IconButton(

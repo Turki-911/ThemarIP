@@ -32,6 +32,8 @@ public class StatementHeaderDto
     public string Currency { get; set; } = string.Empty;
     public string StatementCycle { get; set; } = string.Empty;
     public string StatementDate { get; set; } = string.Empty;
+    public string BankCode { get; set; } = "BANK_MUSCAT";
+    public string BankName { get; set; } = "Bank Muscat";
 }
 
 public class StatementResultDto
@@ -45,6 +47,8 @@ public class StatementResultDto
     public int TotalCount { get; set; }
     public bool HasValidationErrors { get; set; }
     public string? ErrorMessage { get; set; }
+    public string BankCode { get; set; } = "BANK_MUSCAT";
+    public string BankName { get; set; } = "Bank Muscat";
 }
 
 public class ConfirmStatementRequestDto
@@ -53,6 +57,8 @@ public class ConfirmStatementRequestDto
     public string TempFileId { get; set; } = string.Empty;
     public StatementHeaderDto Header { get; set; } = new();
     public List<ParsedTransactionDto> Transactions { get; set; } = new();
+    public string BankCode { get; set; } = "BANK_MUSCAT";
+    public string BankName { get; set; } = "Bank Muscat";
 }
 
 public class SaveMerchantRequestDto

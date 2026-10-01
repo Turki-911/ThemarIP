@@ -11,7 +11,7 @@ public interface IBankMuscatPdfParser
 
 public interface IStatementExtractionService
 {
-    Task<StatementResultDto> ProcessUploadAsync(Stream pdfStream);
+    Task<StatementResultDto> ProcessUploadAsync(Stream pdfStream, string bankCode = "BANK_MUSCAT");
     Task<bool> ConfirmAndImportAsync(ConfirmStatementRequestDto request);
 }
 

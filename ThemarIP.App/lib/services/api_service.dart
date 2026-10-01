@@ -156,12 +156,17 @@ class ApiService {
   // ============================================================
   // 5. BMPF ENGINE SERVICES
   // ============================================================
-  Future<Map<String, dynamic>> parsePdfStatement(List<int> bytes, String fileName) async {
+  Future<Map<String, dynamic>> parsePdfStatement(
+    List<int> bytes,
+    String fileName, {
+    String bankCode = 'BANK_MUSCAT',
+  }) async {
     final formData = FormData.fromMap({
       'file': MultipartFile.fromBytes(bytes, filename: fileName),
+      'bankCode': bankCode,
     });
     final response = await _dio.post(
-      ApiConfig.statementsParse,
+      '${ApiConfig.statementsParse}?bankCode=$bankCode',
       data: formData,
     );
     if (response.data is Map<String, dynamic>) {

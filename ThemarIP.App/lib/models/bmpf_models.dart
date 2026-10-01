@@ -2,11 +2,15 @@ class BmpfHeader {
   final String accountNumber;
   final String statementCycle;
   final String? accountHolder;
+  final String bankCode;
+  final String bankName;
 
   BmpfHeader({
     required this.accountNumber,
     required this.statementCycle,
     this.accountHolder,
+    this.bankCode = 'BANK_MUSCAT',
+    this.bankName = 'Bank Muscat',
   });
 
   factory BmpfHeader.fromJson(Map<String, dynamic> json) {
@@ -14,6 +18,8 @@ class BmpfHeader {
       accountNumber: json['accountNumber']?.toString() ?? '--',
       statementCycle: json['statementCycle']?.toString() ?? '--',
       accountHolder: json['accountHolder']?.toString(),
+      bankCode: json['bankCode']?.toString() ?? 'BANK_MUSCAT',
+      bankName: json['bankName']?.toString() ?? 'Bank Muscat',
     );
   }
 }
@@ -107,6 +113,8 @@ class BmpfParseResult {
   final List<BmpfTransaction> transactions;
   final int extractionConfidence;
   final String reconciliationStatus;
+  final String bankCode;
+  final String bankName;
   final Map<String, dynamic> rawJson;
 
   BmpfParseResult({
@@ -114,6 +122,8 @@ class BmpfParseResult {
     required this.transactions,
     required this.extractionConfidence,
     required this.reconciliationStatus,
+    this.bankCode = 'BANK_MUSCAT',
+    this.bankName = 'Bank Muscat',
     required this.rawJson,
   });
 
@@ -123,11 +133,16 @@ class BmpfParseResult {
         .map((e) => BmpfTransaction.fromJson(e as Map<String, dynamic>))
         .toList();
 
+    final bCode = json['bankCode']?.toString() ?? headerObj['bankCode']?.toString() ?? 'BANK_MUSCAT';
+    final bName = json['bankName']?.toString() ?? headerObj['bankName']?.toString() ?? 'Bank Muscat';
+
     return BmpfParseResult(
       header: BmpfHeader.fromJson(headerObj),
       transactions: txList,
       extractionConfidence: (json['extractionConfidence'] as num?)?.toInt() ?? 100,
       reconciliationStatus: json['reconciliationStatus']?.toString() ?? 'PASS',
+      bankCode: bCode,
+      bankName: bName,
       rawJson: json,
     );
   }

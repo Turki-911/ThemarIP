@@ -21,11 +21,16 @@ public class StatementExtractionService : IStatementExtractionService
         _context = context;
     }
 
-    public async Task<StatementResultDto> ProcessUploadAsync(Stream pdfStream)
+    public async Task<StatementResultDto> ProcessUploadAsync(Stream pdfStream, string bankCode = "BANK_MUSCAT")
     {
         // 1. Parse the PDF
         var result = _parser.ParsePdf(pdfStream);
         
+        result.BankCode = bankCode;
+        result.BankName = GetBankName(bankCode);
+        result.Header.BankCode = bankCode;
+        result.Header.BankName = result.BankName;
+
         // 2. Identify the User based on Account Number (Schema Rule)
         Guid? userId = null;
         if (!string.IsNullOrEmpty(result.Header.AccountNumber))
@@ -64,6 +69,19 @@ public class StatementExtractionService : IStatementExtractionService
 
         return result;
     }
+
+    private static string GetBankName(string bankCode) => bankCode?.ToUpperInvariant() switch
+    {
+        "BANK_MUSCAT" => "Bank Muscat",
+        "NBO" => "National Bank of Oman",
+        "BANK_DHOFAR" => "Bank Dhofar",
+        "OAB" => "Oman Arab Bank",
+        "SOHAR_INTL" => "Sohar International",
+        "AHLI_BANK" => "Ahli Bank",
+        "BANK_NIZWA" => "Bank Nizwa",
+        "ALIZZ_ISLAMIC" => "Alizz Islamic Bank",
+        _ => !string.IsNullOrWhiteSpace(bankCode) ? bankCode : "Bank Muscat"
+    };
 
     public async Task<bool> ConfirmAndImportAsync(ConfirmStatementRequestDto request)
     {

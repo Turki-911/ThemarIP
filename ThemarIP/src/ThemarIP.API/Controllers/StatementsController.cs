@@ -25,7 +25,7 @@ public class StatementsController : ControllerBase
     }
 
     [HttpPost("parse")]
-    public async Task<IActionResult> ParseStatement(IFormFile file)
+    public async Task<IActionResult> ParseStatement(IFormFile file, [FromQuery] string? bankCode, [FromForm] string? bank)
     {
         if (file == null || file.Length == 0)
             return BadRequest("No file uploaded.");
@@ -33,8 +33,10 @@ public class StatementsController : ControllerBase
         if (file.ContentType != "application/pdf")
             return BadRequest("File must be a PDF.");
 
+        var selectedBank = !string.IsNullOrWhiteSpace(bankCode) ? bankCode : (!string.IsNullOrWhiteSpace(bank) ? bank : "BANK_MUSCAT");
+
         using var stream = file.OpenReadStream();
-        var result = await _extractionService.ProcessUploadAsync(stream);
+        var result = await _extractionService.ProcessUploadAsync(stream, selectedBank);
 
         return Ok(result);
     }

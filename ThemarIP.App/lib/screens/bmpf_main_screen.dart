@@ -161,7 +161,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   Future<void> _confirmPdfImport() async {
     if (_pdfParseResult == null) return;
-    _showLoading('Injecting parsed statement transactions into themarip.db...');
+    _showLoading('Processing statement transactions...');
     try {
       final success = await _apiService.confirmPdfImport(
         _pdfParseResult!.rawJson,
@@ -266,7 +266,6 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               Expanded(
                 child: _selectedPageIndex == 0 ? _buildExtractorPage() : _buildCategoriesPage(),
               ),
-              _buildLiveDbFooter(),
             ],
           ),
           if (_isLoading) _buildLoadingOverlay(),
@@ -369,22 +368,6 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                   icon: Icons.account_tree_outlined,
                   route: '/categories',
                 ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.circle, size: 8, color: Color(0xFF10B981)),
-                SizedBox(width: 6),
-                Text('themarip.db', style: TextStyle(fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -562,7 +545,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                       ElevatedButton.icon(
                         onPressed: _confirmPdfImport,
                         icon: const Icon(Icons.cloud_done, size: 16),
-                        label: const Text('Feed themarip.db', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        label: const Text('Save & Categorize', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF10B981),
                           foregroundColor: Colors.white,
@@ -709,7 +692,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               children: const [
                 Text('Category Hierarchy', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                 SizedBox(height: 2),
-                Text('Loaded from themarip.db', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                Text('Automated Financial Categorization', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
               ],
             ),
             IconButton(
@@ -734,7 +717,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               border: Border.all(color: const Color(0xFF26324A)),
             ),
             child: const Center(
-              child: Text('No categories found in themarip.db.', style: TextStyle(color: Color(0xFF94A3B8))),
+              child: Text('No categories found.', style: TextStyle(color: Color(0xFF94A3B8))),
             ),
           )
         else

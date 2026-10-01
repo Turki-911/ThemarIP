@@ -46,8 +46,7 @@ class _SplashScreenState extends State<SplashScreen> {
     setState(() {
       _progress = 0.55;
       _statusMessage = 'Verifying API & database connection...';
-      _statusSubtext =
-          'Connecting to ${ApiConfig.baseUrl} (themarip.db)';
+      _statusSubtext = 'Connecting to API server...';
     });
 
     final health = await _apiService.checkHealth();
@@ -667,7 +666,7 @@ class _SplashScreenState extends State<SplashScreen> {
                             ),
                             _buildDiagnosticBadge(
                               label: 'Database',
-                              value: 'themarip.db',
+                              value: 'Connected',
                               isSuccess: _healthResult?.isHealthy == true,
                             ),
                             Container(

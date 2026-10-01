@@ -7,7 +7,7 @@
 
 // Dynamic API Base URL for local & production tunnel hosting
 const THEMAR_API_BASE = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-  ? 'https://then-eyes-comm-dicke.trycloudflare.com/api'
+  ? (window.location.origin + '/api')
   : 'http://localhost:5267/api';
 
 

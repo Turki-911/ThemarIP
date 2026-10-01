@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 
@@ -50,9 +51,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // Redirect user to login page
       Navigator.of(context).pushReplacementNamed('/login');
     } catch (e) {
+      String msg = 'Registration failed. Please try again.';
+      if (e is DioException) {
+        if (e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout) {
+          msg = 'Unable to connect to the server. Please check your connection.';
+        } else if (e.response?.data != null && e.response?.data is Map) {
+          final data = e.response!.data as Map;
+          if (data['message'] != null) {
+            msg = data['message'].toString();
+          }
+        } else if (e.response?.statusCode == 409 || e.response?.statusCode == 400) {
+          msg = 'Registration failed. User with this email may already exist.';
+        }
+      }
       setState(() {
-        _errorMessage =
-            'Registration failed. User with this email may already exist.';
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
 
@@ -10,13 +11,20 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'user1@themar.ip');
-  final _passwordController = TextEditingController(text: 'UserPassword123!');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _apiService = ApiService();
   bool _isLoading = false;
   String? _errorMessage;
 
   Future<void> _handleLogin() async {
+    if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter both your email and password.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -31,9 +39,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Navigator.of(context).pushReplacementNamed('/upload');
     } catch (e) {
+      String msg = 'Invalid email or password. Please check your credentials.';
+      if (e is DioException) {
+        if (e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout) {
+          msg = 'Unable to connect to the server. Please check your connection.';
+        } else if (e.response?.data != null && e.response?.data is Map) {
+          final data = e.response!.data as Map;
+          if (data['message'] != null) {
+            msg = data['message'].toString();
+          }
+        }
+      }
       setState(() {
-        _errorMessage =
-            'Invalid email or password. Please check your credentials.';
+        _errorMessage = msg;
       });
     } finally {
       if (mounted) {

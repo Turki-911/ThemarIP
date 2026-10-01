@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: themarip-api
+    name: themarip
     env: docker
     dockerfilePath: src/ThemarIP.API/Dockerfile
     dockerContext: ThemarIP

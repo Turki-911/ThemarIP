@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="ThemarIP — Bank Muscat Personal Finance Management Intelligence Platform">
+
+  <!-- Viewport -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ThemarIP">
+  <meta name="theme-color" content="#0B0F19">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>ThemarIP — Bank Muscat PFM Intelligence</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #0B0F19;
+      color: #E2E8F0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 30%, #151F32 0%, #0B0F19 80%);
+      z-index: 99999;
+      transition: opacity 0.4s ease-out;
+    }
+    .logo-container {
+      width: 88px;
+      height: 88px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #10B981 0%, #059669 50%, #047857 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 12px 36px rgba(16, 185, 129, 0.35);
+      margin-bottom: 24px;
+      animation: pulseGlow 2.5s infinite ease-in-out;
+    }
+    .logo-container svg {
+      width: 48px;
+      height: 48px;
+      fill: #FFFFFF;
+    }
+    .app-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #F8FAFC;
+      margin-bottom: 6px;
+    }
+    .app-subtitle {
+      font-size: 13px;
+      color: #94A3B8;
+      letter-spacing: 0.3px;
+      margin-bottom: 36px;
+      text-transform: uppercase;
+    }
+    .loader-bar {
+      width: 180px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .loader-bar-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 40%;
+      background: linear-gradient(90deg, #10B981, #34D399);
+      border-radius: 999px;
+      animation: indeterminate 1.6s infinite ease-in-out;
+    }
+    .status-text {
+      font-size: 12px;
+      color: #64748B;
+      min-height: 18px;
+    }
+    #error-container {
+      display: none;
+      margin-top: 24px;
+      text-align: center;
+      max-width: 320px;
+    }
+    #error-container button {
+      margin-top: 14px;
+      padding: 10px 20px;
+      background: #10B981;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    @keyframes pulseGlow {
+      0%, 100% {
+        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.25);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 16px 45px rgba(16, 185, 129, 0.45);
+        transform: scale(1.03);
+      }
+    }
+    @keyframes indeterminate {
+      0% {
+        left: -40%;
+      }
+      100% {
+        left: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- High-end Instant Loading Screen -->
+  <div id="loading-screen">
+    <div class="logo-container">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="app-title">ThemarIP</div>
+    <div class="app-subtitle">Bank Muscat PFM Intelligence</div>
+    <div class="loader-bar">
+      <div class="loader-bar-fill"></div>
+    </div>
+    <div class="status-text" id="status-label">Initializing system kernel...</div>
+    <div id="error-container">
+      <div id="error-message" style="color: #F87171; font-size: 12px; line-height: 1.4;"></div>
+      <button onclick="window.location.reload(true)">Reload Application</button>
+    </div>
+  </div>
+
+  <script>
+    // Smooth transition when Flutter mounts
+    function hideLoadingScreen() {
+      var screen = document.getElementById('loading-screen');
+      if (screen) {
+        screen.style.opacity = '0';
+        setTimeout(function() {
+          if (screen && screen.parentNode) {
+            screen.parentNode.removeChild(screen);
+          }
+        }, 400);
+      }
+    }
+
+    // 1. Listen for standard Flutter first-frame event
+    window.addEventListener('flutter-first-frame', function () {
+      hideLoadingScreen();
+    });
+
+    // 2. Fallback observer for flutter-view or glass-pane DOM nodes
+    var observer = new MutationObserver(function (mutations, obs) {
+      if (document.querySelector('flutter-view, flt-glass-pane')) {
+        hideLoadingScreen();
+        obs.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 3. Fallback timeout & error handling
+    window.addEventListener('error', function(e) {
+      var errEl = document.getElementById('error-message');
+      var errBox = document.getElementById('error-container');
+      if (errEl && errBox) {
+        errEl.innerText = 'Initialization notice: ' + (e.message || 'Connecting to host...');
+      }
+    });
+
+    setTimeout(function() {
+      var label = document.getElementById('status-label');
+      if (label && document.getElementById('loading-screen')) {
+        label.innerText = 'Finishing workspace setup...';
+      }
+    }, 4000);
+
+    setTimeout(function() {
+      var errBox = document.getElementById('error-container');
+      if (errBox && document.getElementById('loading-screen')) {
+        errBox.style.display = 'block';
+      }
+    }, 15000);
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

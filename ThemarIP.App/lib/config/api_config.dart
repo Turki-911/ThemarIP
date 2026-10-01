@@ -14,9 +14,22 @@ class ApiConfig {
   static Future<void> loadSavedHost() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (kIsWeb) {
+        // On web, always clear any saved host so it routes via browser origin
+        await prefs.remove(_prefKeyHost);
+        _customHost = null;
+        return;
+      }
       final saved = prefs.getString(_prefKeyHost);
       if (saved != null && saved.trim().isNotEmpty) {
-        _customHost = saved.trim();
+        final val = saved.trim();
+        // Purge old expired quick tunnels from local device storage
+        if (val.contains('trycloudflare.com')) {
+          await prefs.remove(_prefKeyHost);
+          _customHost = null;
+        } else {
+          _customHost = val;
+        }
       }
     } catch (_) {}
   }
@@ -44,16 +57,16 @@ class ApiConfig {
     if (_customHost != null && _customHost!.isNotEmpty) {
       return _customHost!;
     }
-    // Production release builds (shared APK, online Web) always use live public backend
-    if (kReleaseMode) {
-      return livePublicApiUrl;
-    }
     if (kIsWeb) {
-      final host = Uri.base.host;
-      if (host.isNotEmpty && host != 'localhost' && host != '127.0.0.1') {
-        return livePublicApiUrl;
+      final origin = Uri.base.origin;
+      if (origin.isNotEmpty && !origin.startsWith('http://localhost') && !origin.startsWith('http://127.0.0.1')) {
+        return origin;
       }
       return 'localhost';
+    }
+    // Production release mobile builds (shared APK, iOS) always use live public backend
+    if (kReleaseMode) {
+      return livePublicApiUrl;
     }
     // Android emulator routes to host via 10.0.2.2
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -68,6 +81,22 @@ class ApiConfig {
 
   /// Returns the full base API URL (e.g. http://172.20.10.5:5267/api)
   static String get baseUrl {
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      if (origin.isNotEmpty && !origin.startsWith('http://localhost') && !origin.startsWith('http://127.0.0.1')) {
+        return '$origin/api';
+      }
+      return 'http://localhost:5267/api';
+    }
+
+    if (_customHost != null && _customHost!.isNotEmpty) {
+      final host = _customHost!;
+      if (host.startsWith('http://') || host.startsWith('https://')) {
+        return host.endsWith('/api') ? host : '$host/api';
+      }
+      return 'http://$host:5267/api';
+    }
+
     final host = activeHost;
     if (host.startsWith('http://') || host.startsWith('https://')) {
       return host.endsWith('/api') ? host : '$host/api';

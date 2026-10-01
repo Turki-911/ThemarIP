@@ -175,10 +175,23 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 }
 
 app.UseCors();
-app.UseHttpsRedirection();
+
+var contentTypeProvider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+contentTypeProvider.Mappings[".wasm"] = "application/wasm";
+contentTypeProvider.Mappings[".apk"] = "application/vnd.android.package-archive";
+contentTypeProvider.Mappings[".json"] = "application/json";
+
+app.UseDefaultFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = contentTypeProvider,
+    ServeUnknownFileTypes = true
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 // 10. Health & Infrastructure Diagnostics Endpoint
 app.MapGet("/api/health", async (ApplicationDbContext db) =>

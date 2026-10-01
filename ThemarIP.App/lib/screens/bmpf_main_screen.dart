@@ -1117,37 +1117,6 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     );
   }
 
-  // ============================================================
-  // STICKY BOTTOM BAR: LIVE DATABASE STATUS
-  // ============================================================
-  Widget _buildLiveDbFooter() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xFF121824),
-        border: Border(top: BorderSide(color: Color(0xFF26324A))),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.storage, size: 18, color: Color(0xFF7C3AED)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Live themarip.db: $_dbTxCount transactions in PfmTransactions',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, size: 18, color: Color(0xFF60A5FA)),
-            onPressed: _fetchLiveDbCount,
-            tooltip: 'Refresh Status',
-            visualDensity: VisualDensity.compact,
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildLoadingOverlay() {
     return Container(

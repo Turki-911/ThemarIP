@@ -1270,13 +1270,13 @@ const Categories = {
       btn.addEventListener('click', async ()=>{
         const catId = btn.dataset.catId;
         const cat = state.categories.find(c=>c.id===catId);
-        if (cat && confirm(`Are you sure you want to delete category "${cat.name}" from themarip.db?`)) {
+        if (cat && confirm(`Are you sure you want to delete category "${cat.name}"?`)) {
           try {
             const res = await fetch(`${THEMAR_API_BASE}/statements/categories/${catId}`, { method: 'DELETE' });
             if (res.ok) {
               await loadCategoryRulesFromDb();
               Categories.render();
-              Toast.success(`Category "${cat.name}" deleted from themarip.db.`);
+              Toast.success(`Category "${cat.name}" deleted.`);
             }
           } catch(e) { console.error(e); }
         }
@@ -1286,13 +1286,13 @@ const Categories = {
       btn.addEventListener('click', async ()=>{
         const subId = btn.dataset.subcatId;
         const sub = state.subcategories.find(s=>s.id===subId);
-        if (sub && confirm(`Are you sure you want to delete subcategory "${sub.name}" from themarip.db?`)) {
+        if (sub && confirm(`Are you sure you want to delete subcategory "${sub.name}"?`)) {
           try {
             const res = await fetch(`${THEMAR_API_BASE}/statements/categories/${subId}`, { method: 'DELETE' });
             if (res.ok) {
               await loadCategoryRulesFromDb();
               Categories.render();
-              Toast.success(`Subcategory "${sub.name}" deleted from themarip.db.`);
+              Toast.success(`Subcategory "${sub.name}" deleted.`);
             }
           } catch(e) { console.error(e); }
         }
@@ -1335,7 +1335,7 @@ const Categories = {
           });
           if (res.ok) {
             await loadCategoryRulesFromDb();
-            Toast.success(`Subcategory "${name}" created and saved to themarip.db.`);
+            Toast.success(`Subcategory "${name}" created successfully.`);
           }
         } catch(e) {
           console.error(e);
@@ -1357,7 +1357,7 @@ const Categories = {
           });
           if (res.ok) {
             await loadCategoryRulesFromDb();
-            Toast.success(`Category "${name}" created and saved to themarip.db.`);
+            Toast.success(`Category "${name}" created successfully.`);
           }
         } catch(e) {
           console.error(e);
@@ -1670,10 +1670,10 @@ const Merchants = {
             const data = await res.json();
             m.status = data.status || nextStatus;
             AuditLog.record('TOGGLE','Merchant',`${m.status==='active'?'Activated':'Deactivated'} merchant: ${m.name}`);
-            Toast.success(`Merchant ${m.name} is now ${m.status}. Saved to themarip.db.`);
+            Toast.success(`Merchant ${m.name} is now ${m.status}.`);
             Merchants._renderTable();
           } else {
-            Toast.error('Failed to toggle merchant status in database.');
+            Toast.error('Failed to toggle merchant status.');
           }
         } catch (e) {
           m.status = nextStatus;
@@ -1766,7 +1766,7 @@ const Merchants = {
           Object.assign(m, { name, mcc, defaultCategoryId:categoryId, defaultSubcategoryId:subcategoryId, defaultConfidence:confidence, status, aliases });
         }
         AuditLog.record('UPDATE','Merchant',`Updated merchant: ${name}`);
-        Toast.success(`Merchant "${name}" updated and saved to themarip.db!`);
+        Toast.success(`Merchant "${name}" updated successfully.`);
       } else {
         // New merchant or client-only mock
         const res = await fetch(THEMAR_API_BASE + '/statements/merchants', {
@@ -1792,10 +1792,10 @@ const Merchants = {
         };
         state.merchants.unshift(newM);
         AuditLog.record('CREATE','Merchant',`Created merchant: ${name}`);
-        Toast.success(`Merchant "${name}" created and saved to themarip.db!`);
+        Toast.success(`Merchant "${name}" created successfully.`);
       }
     } catch (err) {
-      console.error('Failed to save merchant to themarip.db:', err);
+      console.error('Failed to save merchant:', err);
       // Fallback local memory update
       if (id) {
         const m = state.merchants.find(m=>m.id===id);

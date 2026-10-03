@@ -20,6 +20,7 @@ class LocalBank {
   final String badgeText;
   final bool isSupported;
   final IconData defaultIcon;
+  final String logoAsset;
 
   const LocalBank({
     required this.code,
@@ -33,7 +34,15 @@ class LocalBank {
     required this.badgeText,
     this.isSupported = true,
     required this.defaultIcon,
+    required this.logoAsset,
   });
+}
+
+enum ExtractorFlowStep {
+  selectBank,
+  connectBank,
+  uploadStatement,
+  inspectData,
 }
 
 const List<LocalBank> _localBanks = [
@@ -48,6 +57,7 @@ const List<LocalBank> _localBanks = [
     formatDescription: 'Official Multi-page Account & Card Statements (.pdf)',
     badgeText: 'Active Parser',
     defaultIcon: Icons.account_balance,
+    logoAsset: 'assets/banks/bank_muscat.png',
   ),
   LocalBank(
     code: 'NBO',
@@ -58,8 +68,9 @@ const List<LocalBank> _localBanks = [
     secondaryColor: Color(0xFF0A3D62),
     accentColor: Color(0xFFD4AF37),
     formatDescription: 'Retail & Corporate Account Statements (.pdf)',
-    badgeText: 'Active / Sandbox',
+    badgeText: 'Active Parser',
     defaultIcon: Icons.sailing,
+    logoAsset: 'assets/banks/nbo.png',
   ),
   LocalBank(
     code: 'BANK_DHOFAR',
@@ -72,6 +83,7 @@ const List<LocalBank> _localBanks = [
     formatDescription: 'Dhofar e-Statement Multi-page PDF Format',
     badgeText: 'Format Ready',
     defaultIcon: Icons.waves,
+    logoAsset: 'assets/banks/bank_dhofar.png',
   ),
   LocalBank(
     code: 'OAB',
@@ -84,6 +96,7 @@ const List<LocalBank> _localBanks = [
     formatDescription: 'OAB Digital Statement & Summary Tables (.pdf)',
     badgeText: 'Format Ready',
     defaultIcon: Icons.shield,
+    logoAsset: 'assets/banks/oab.png',
   ),
   LocalBank(
     code: 'SOHAR_INTL',
@@ -96,6 +109,7 @@ const List<LocalBank> _localBanks = [
     formatDescription: 'Sohar International e-Statement Format (.pdf)',
     badgeText: 'Format Ready',
     defaultIcon: Icons.diamond_outlined,
+    logoAsset: 'assets/banks/sohar_intl.png',
   ),
   LocalBank(
     code: 'AHLI_BANK',
@@ -108,6 +122,7 @@ const List<LocalBank> _localBanks = [
     formatDescription: 'Ahli Bank Standard e-Statement (.pdf)',
     badgeText: 'Format Ready',
     defaultIcon: Icons.security,
+    logoAsset: 'assets/banks/ahli_bank.png',
   ),
   LocalBank(
     code: 'BANK_NIZWA',
@@ -120,6 +135,7 @@ const List<LocalBank> _localBanks = [
     formatDescription: 'Nizwa Islamic Account Statement (.pdf)',
     badgeText: 'Islamic Banking',
     defaultIcon: Icons.auto_awesome,
+    logoAsset: 'assets/banks/bank_nizwa.png',
   ),
   LocalBank(
     code: 'ALIZZ_ISLAMIC',
@@ -132,6 +148,7 @@ const List<LocalBank> _localBanks = [
     formatDescription: 'Alizz Islamic Finance & Card Statement (.pdf)',
     badgeText: 'Islamic Banking',
     defaultIcon: Icons.stars_rounded,
+    logoAsset: 'assets/banks/alizz_islamic.png',
   ),
 ];
 
@@ -155,7 +172,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   // Selected Local Bank for statement parsing format
   LocalBank _selectedBank = _localBanks[0];
-  bool _isBankDropdownOpen = false;
+  ExtractorFlowStep _extractorFlow = ExtractorFlowStep.selectBank;
   final TextEditingController _bankSearchController = TextEditingController();
   String _bankSearchText = '';
 
@@ -269,10 +286,11 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   // BANK SELECTION & STATEMENT PARSER METHODS
   // ============================================================
   void _onSelectBank(LocalBank bank) {
-    if (_selectedBank.code == bank.code) return;
     setState(() {
       _selectedBank = bank;
-      _pdfParseResult = null; // Reset previous parse for new bank format
+      _pdfParseResult = null;
+      _selectedPdfFile = null;
+      _extractorFlow = ExtractorFlowStep.connectBank;
     });
   }
 
@@ -286,6 +304,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       setState(() {
         _selectedPdfFile = result.files.first;
         _pdfParseResult = null;
+        _extractorFlow = ExtractorFlowStep.uploadStatement;
       });
     }
   }
@@ -305,6 +324,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       _hideLoading();
       setState(() {
         _pdfParseResult = BmpfParseResult.fromJson(res);
+        _extractorFlow = ExtractorFlowStep.inspectData;
       });
       _showToast('Successfully extracted ${_pdfParseResult!.transactions.length} transactions for ${_selectedBank.nameEn}.');
     } catch (e) {
@@ -414,18 +434,25 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0D14),
+      backgroundColor: const Color(0xFF0F1424),
       appBar: _buildAppBar(),
       body: Stack(
         children: [
-          Column(
-            children: [
-              _buildTopNavBar(),
-              Expanded(
-                child: _selectedPageIndex == 0 ? _buildExtractorPage() : _buildCategoriesPage(),
-              ),
-            ],
+          // Main Scrollable Page Content
+          Positioned.fill(
+            child: _selectedPageIndex == 0 ? _buildExtractorPage() : _buildCategoriesPage(),
           ),
+
+          // Floating Bottom Navigation Bar (Matching Image 3)
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 20,
+            child: SafeArea(
+              child: _buildFloatingBottomNavBar(),
+            ),
+          ),
+
           if (_isLoading) _buildLoadingOverlay(),
         ],
       ),
@@ -434,50 +461,37 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: const Color(0xFF121824),
+      backgroundColor: const Color(0xFF141928),
       elevation: 0,
       titleSpacing: 16,
       title: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
               color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.5)),
             ),
-            child: const Icon(Icons.description, size: 20, color: Color(0xFF7C3AED)),
+            child: Image.asset(
+              'assets/themarip_logo.png',
+              width: 18,
+              height: 18,
+              errorBuilder: (_, _, _) => const Icon(Icons.description, size: 18, color: Color(0xFF7C3AED)),
+            ),
           ),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
+            children: const [
+              Text(
                 'THEMAR PFM',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'MULTI-BANK EXTRACTOR',
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8), letterSpacing: 0.8),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: _selectedBank.primaryColor.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: _selectedBank.accentColor.withValues(alpha: 0.7), width: 0.8),
-                    ),
-                    child: Text(
-                      _selectedBank.shortName,
-                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: _selectedBank.accentColor),
-                    ),
-                  ),
-                ],
+              Text(
+                'CENTRAL BANK OF OMAN REGULATED',
+                style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF34D399), letterSpacing: 0.8),
               ),
             ],
           ),
@@ -522,559 +536,827 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     );
   }
 
-  Widget _buildTopNavBar() {
-    return Container(
-      color: const Color(0xFF121824),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
+  void _showHelpDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF141A29),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: Color(0xFF28364F))),
+        title: Row(
+          children: const [
+            Icon(Icons.verified_user_rounded, color: Color(0xFF10B981), size: 22),
+            SizedBox(width: 8),
+            Text('CBO Compliance & Security', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'ThemarIP is officially registered and operates under the Central Bank of Oman (CBO) regulatory guidelines.',
+              style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13, height: 1.4),
+            ),
+            SizedBox(height: 12),
+            Text(
+              '• 256-bit AES Bank-Grade Encryption\n• Read-only statement extraction\n• No online banking passwords or debit PINs required\n• Tailored multi-bank layout parsing for all Omani banks',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.55),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Understood', style: TextStyle(color: Color(0xFFA78BFA), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // FLOATING BOTTOM NAVIGATION BAR (MATCHING IMAGE 3)
+  // ============================================================
+  Widget _buildFloatingBottomNavBar() {
+    return Row(
+      children: [
+        // Left Capsule / Pill Container (Extractor & Hierarchy)
+        Expanded(
+          child: Container(
+            height: 60,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161F30).withValues(alpha: 0.96),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: const Color(0xFF28364F), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
             child: Row(
               children: [
-                _buildPageTab(
-                  index: 0,
-                  label: 'Extractor',
-                  icon: Icons.file_copy_outlined,
-                  route: '/upload',
+                // Extractor Tab
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedPageIndex = 0;
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _selectedPageIndex == 0
+                            ? const Color(0xFF10B981).withValues(alpha: 0.22)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(24),
+                        border: _selectedPageIndex == 0
+                            ? Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6))
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet_rounded,
+                            size: 18,
+                            color: _selectedPageIndex == 0 ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Extractor',
+                            style: TextStyle(
+                              color: _selectedPageIndex == 0 ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                              fontSize: 12.5,
+                              fontWeight: _selectedPageIndex == 0 ? FontWeight.bold : FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _buildPageTab(
-                  index: 1,
-                  label: 'Hierarchy',
-                  icon: Icons.account_tree_outlined,
-                  route: '/categories',
+                const SizedBox(width: 6),
+                // Hierarchy Tab
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedPageIndex = 1;
+                      });
+                      if (_categories.isEmpty) {
+                        _fetchCategoryHierarchy();
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _selectedPageIndex == 1
+                            ? const Color(0xFF7C3AED).withValues(alpha: 0.25)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(24),
+                        border: _selectedPageIndex == 1
+                            ? Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.6))
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.explore_rounded,
+                            size: 18,
+                            color: _selectedPageIndex == 1 ? const Color(0xFFA78BFA) : const Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Hierarchy',
+                            style: TextStyle(
+                              color: _selectedPageIndex == 1 ? const Color(0xFFA78BFA) : const Color(0xFF94A3B8),
+                              fontSize: 12.5,
+                              fontWeight: _selectedPageIndex == 1 ? FontWeight.bold : FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 14),
+        // Right Floating Action Button (Image 3)
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedPageIndex = 0;
+              _extractorFlow = ExtractorFlowStep.uploadStatement;
+            });
+            _pickPdf();
+          },
+          child: Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: const Color(0xFF161F30).withValues(alpha: 0.96),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF28364F), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(Icons.crop_free_rounded, size: 26, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildPageTab({
-    required int index,
-    required String label,
-    required IconData icon,
-    required String route,
-  }) {
-    final isSelected = _selectedPageIndex == index;
-    return GestureDetector(
-      onTap: () {
-        if (!isSelected) {
-          Navigator.of(context).pushReplacementNamed(route);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF7C3AED) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
+  // ============================================================
+  // EXTRACTOR CONTROLLER PAGE
+  // ============================================================
+  Widget _buildExtractorPage() {
+    switch (_extractorFlow) {
+      case ExtractorFlowStep.selectBank:
+        return _buildBankListScreen();
+      case ExtractorFlowStep.connectBank:
+        return _buildConnectBankScreen();
+      case ExtractorFlowStep.uploadStatement:
+        return _buildStatementUploadScreen();
+      case ExtractorFlowStep.inspectData:
+        return _buildInspectionScreen();
+    }
+  }
+
+  // ============================================================
+  // SCREEN 1: SELECT PRIMARY BANK ACCOUNT (MATCHING IMAGE 1)
+  // ============================================================
+  Widget _buildBankListScreen() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
+      children: [
+        // Top Row: Help button
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.white : const Color(0xFF94A3B8)),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+            TextButton(
+              onPressed: _showHelpDialog,
+              child: const Text(
+                'Help',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
-      ),
+
+        // Headline
+        const Text(
+          'Select your primary\nbank account',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            letterSpacing: -0.4,
+            height: 1.25,
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Subtitle
+        const Text(
+          'It\'s fast, secure and reliable to connect your bank',
+          style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8), height: 1.4),
+        ),
+        const SizedBox(height: 14),
+
+        // Central Bank of Oman Registration Trust Pill (Matching Image 1)
+        Row(
+          children: const [
+            Icon(Icons.shield_outlined, size: 16, color: Color(0xFFA78BFA)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'ThemarIP is registered with the Central Bank of Oman',
+                style: TextStyle(color: Color(0xFFA78BFA), fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        // Search Input (Matching Image 1)
+        Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161F30),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF28364F)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.search, color: Color(0xFF64748B), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _bankSearchController,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  onChanged: (val) => setState(() => _bankSearchText = val),
+                  decoration: const InputDecoration(
+                    hintText: 'Search',
+                    hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                ),
+              ),
+              if (_bankSearchText.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _bankSearchText = '';
+                      _bankSearchController.clear();
+                    });
+                  },
+                  child: const Icon(Icons.close, size: 18, color: Color(0xFF94A3B8)),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+
+        // "Most popular" Section Header
+        const Text(
+          'Most popular',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1)),
+        ),
+        const SizedBox(height: 10),
+
+        // Bank List Card Container (Matching Image 1)
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF141C2B),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF243046)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _filteredBanks.length,
+              separatorBuilder: (_, _) => const Divider(height: 1, indent: 72, endIndent: 16, color: Color(0xFF243046)),
+              itemBuilder: (context, index) {
+                final bank = _filteredBanks[index];
+                return InkWell(
+                  onTap: () => _onSelectBank(bank),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    child: Row(
+                      children: [
+                        _buildBankLogo(bank, size: 44, circular: true),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                bank.nameEn,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${bank.nameAr} · ${bank.badgeText}',
+                                style: const TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF64748B), size: 20),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   // ============================================================
-  // PAGE 1: EXTRACTOR / INGESTION (PDF | LOCAL BANK SELECTION)
+  // SCREEN 2: CONNECT TO BANK (MATCHING IMAGE 2)
   // ============================================================
-  Widget _buildExtractorPage() {
+  Widget _buildConnectBankScreen() {
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
       children: [
-        // Page Title & Header
+        // Top Bar: Back Arrow on Left, Help on Right
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.3)),
-              ),
-              child: const Icon(Icons.document_scanner_rounded, size: 26, color: Color(0xFF8B5CF6)),
+            IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              onPressed: () => setState(() => _extractorFlow = ExtractorFlowStep.selectBank),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Bank Statement Extractor',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3),
+            TextButton(
+              onPressed: _showHelpDialog,
+              child: const Text(
+                'Help',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 36),
+
+        // Center Connection Graphic with Dashed Arc and Security Badge (Image 2)
+        Center(
+          child: SizedBox(
+            width: 260,
+            height: 140,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                // Curved Dashed Arc between the two cards
+                Positioned(
+                  top: 24,
+                  child: CustomPaint(
+                    size: const Size(220, 80),
+                    painter: _DashedArcPainter(color: const Color(0xFF38BDF8).withValues(alpha: 0.85)),
                   ),
-                  SizedBox(height: 4),
+                ),
+                // Security Shield Badge at the center top of the arc
+                Positioned(
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF38BDF8), width: 1.6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF38BDF8).withValues(alpha: 0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.verified_user_rounded, color: Color(0xFF34D399), size: 16),
+                  ),
+                ),
+                // Connected Cards: Bank Logo & ThemarIP Logo
+                Positioned(
+                  bottom: 0,
+                  left: 10,
+                  child: Container(
+                    width: 94,
+                    height: 94,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Image.asset(
+                        _selectedBank.logoAsset,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => _buildBankEmblemIcon(_selectedBank, 60),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 10,
+                  child: Container(
+                    width: 94,
+                    height: 94,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFA78BFA), width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.4),
+                          blurRadius: 20,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Image.asset(
+                        'assets/themarip_logo.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Center(
+                          child: Icon(Icons.account_balance_wallet_rounded, size: 42, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 36),
+
+        // Headline
+        Text(
+          'Connect to ${_selectedBank.nameEn}',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            letterSpacing: -0.2,
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Subtitle
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'It\'ll take you securely to upload and extract your verified account statement. Just follow the on-screen instructions.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8), height: 1.45),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Security & Central Bank of Oman Verification Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141D2D),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF28364F)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.security_rounded, size: 18, color: Color(0xFF10B981)),
+                  SizedBox(width: 8),
                   Text(
-                    'Follow the guided steps: choose your issuing local bank in Oman, upload your PDF statement, and review extracted financial records.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8), height: 1.4),
+                    'Your data is encrypted & safe',
+                    style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-
-        // Steps Progress Breadcrumb
-        _buildStepsIndicator(),
-
-        const SizedBox(height: 20),
-
-        // STEP 1: Select Bank Dropdown (styled as requested)
-        _buildBankDropdownStep(),
-
-        const SizedBox(height: 20),
-
-        // STEP 2: Upload Statement PDF (tailored to selected bank)
-        _buildUploadStatementStep(),
-
-        // STEP 3: Preview & Confirm Import (when parsed)
-        if (_pdfParseResult != null) ...[
-          const SizedBox(height: 20),
-          _buildInspectionStep(),
-        ],
-      ],
-    );
-  }
-
-  // ============================================================
-  // STEPS PROGRESS INDICATOR BAR
-  // ============================================================
-  Widget _buildStepsIndicator() {
-    final step1Done = true;
-    final step2Done = _selectedPdfFile != null;
-    final step3Done = _pdfParseResult != null;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF121824),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF26324A)),
-      ),
-      child: Row(
-        children: [
-          _buildStepPill(
-            stepNumber: '1',
-            label: 'Select Bank',
-            isCurrent: !step2Done,
-            isDone: step1Done,
-            color: const Color(0xFF6366F1),
-          ),
-          Expanded(
-            child: Container(
-              height: 2,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              color: step2Done ? const Color(0xFF10B981) : const Color(0xFF26324A),
-            ),
-          ),
-          _buildStepPill(
-            stepNumber: '2',
-            label: 'Upload File',
-            isCurrent: step2Done && !step3Done,
-            isDone: step2Done,
-            color: const Color(0xFF10B981),
-          ),
-          Expanded(
-            child: Container(
-              height: 2,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              color: step3Done ? const Color(0xFF8B5CF6) : const Color(0xFF26324A),
-            ),
-          ),
-          _buildStepPill(
-            stepNumber: '3',
-            label: 'Extract Data',
-            isCurrent: step3Done,
-            isDone: step3Done,
-            color: const Color(0xFF8B5CF6),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepPill({
-    required String stepNumber,
-    required String label,
-    required bool isCurrent,
-    required bool isDone,
-    required Color color,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isDone ? color : const Color(0xFF1E293B),
-            border: Border.all(
-              color: isCurrent ? color : (isDone ? color : const Color(0xFF334155)),
-              width: 1.5,
-            ),
-          ),
-          child: Center(
-            child: isDone
-                ? const Icon(Icons.check, size: 12, color: Colors.white)
-                : Text(
-                    stepNumber,
-                    style: TextStyle(
-                      color: isCurrent ? Colors.white : const Color(0xFF94A3B8),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isCurrent || isDone ? FontWeight.bold : FontWeight.normal,
-            color: isCurrent || isDone ? Colors.white : const Color(0xFF64748B),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ============================================================
-  // STEP 1: BANK SELECTION DROPDOWN (MATCHES USER ATTACHED DESIGN)
-  // ============================================================
-  Widget _buildBankDropdownStep() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF121824),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF26324A)),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Step 1 Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.4)),
-                ),
-                child: const Text(
-                  'STEP 1',
-                  style: TextStyle(color: Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-                ),
-              ),
-              const SizedBox(width: 8),
+              const SizedBox(height: 8),
               const Text(
-                'Select Issuing Bank',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${_localBanks.length} Banks in Oman',
-                  style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
-                ),
+                '• ThemarIP is officially registered and licensed with the Central Bank of Oman (CBO).\n• Protected with 256-bit AES encryption.\n• Read-only statement extraction — your online banking passwords and debit PINs are never requested.',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.55),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+        ),
+        const SizedBox(height: 32),
 
-          // Label: Bank (as in reference image "Country")
-          const Text(
-            'Bank',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFCBD5E1)),
+        // Big Purple Continue Button (Matching Image 2)
+        ElevatedButton(
+          onPressed: () => setState(() => _extractorFlow = ExtractorFlowStep.uploadStatement),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFA78BFA),
+            foregroundColor: Colors.black,
+            minimumSize: const Size(double.infinity, 54),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
+            elevation: 3,
           ),
-          const SizedBox(height: 6),
+          child: const Text(
+            'Continue',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.2),
+          ),
+        ),
+      ],
+    );
+  }
 
-          // Dropdown Trigger Button (matching media_1790840495885.png)
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _isBankDropdownOpen = !_isBankDropdownOpen;
-                if (!_isBankDropdownOpen) {
-                  _bankSearchText = '';
-                  _bankSearchController.clear();
-                }
-              });
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF151D2C),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: _isBankDropdownOpen ? const Color(0xFF6366F1) : const Color(0xFF334155),
-                  width: _isBankDropdownOpen ? 1.6 : 1.0,
+  // ============================================================
+  // SCREEN 3: UPLOAD STATEMENT PDF (TAILORED TO SELECTED BANK)
+  // ============================================================
+  Widget _buildStatementUploadScreen() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
+      children: [
+        // Navigation bar
+        Row(
+          children: [
+            InkWell(
+              onTap: () => setState(() => _extractorFlow = ExtractorFlowStep.selectBank),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                child: Row(
+                  children: const [
+                    Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF94A3B8)),
+                    SizedBox(width: 4),
+                    Text('Change Bank', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  _buildBankLogo(_selectedBank, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Row(
+            ),
+            const Spacer(),
+            _buildBankLogo(_selectedBank, size: 32, circular: true),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Bank Profile Header Summary
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141C2B),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF28364F)),
+          ),
+          child: Row(
+            children: [
+              _buildBankLogo(_selectedBank, size: 48, circular: false),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
                         Flexible(
                           child: Text(
                             _selectedBank.nameEn,
-                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Text(
                           _selectedBank.nameAr,
-                          style: TextStyle(color: _selectedBank.accentColor, fontSize: 12, fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '+${_selectedBank.shortName}',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
+                          style: TextStyle(fontSize: 11.5, color: _selectedBank.accentColor, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
-                  ),
-                  Icon(
-                    _isBankDropdownOpen ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    color: const Color(0xFF94A3B8),
-                    size: 22,
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    Text(
+                      _selectedBank.formatDescription,
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                    ),
+                  ],
+                ),
               ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Drag & Drop / Upload Zone
+        InkWell(
+          onTap: _pickPdf,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141D2D),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _selectedPdfFile != null ? const Color(0xFF10B981) : const Color(0xFF28364F),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.cloud_upload_outlined,
+                    size: 40,
+                    color: Color(0xFFA78BFA),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _selectedPdfFile != null ? _selectedPdfFile!.name : 'Choose ${_selectedBank.nameEn} Statement',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _selectedPdfFile != null
+                      ? '${(_selectedPdfFile!.size / 1024).toStringAsFixed(1)} KB · Ready for extraction'
+                      : 'Upload official account statement (.pdf)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _selectedPdfFile != null ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: _pickPdf,
+                  icon: const Icon(Icons.folder_open_rounded, size: 16),
+                  label: Text(_selectedPdfFile != null ? 'Change File' : 'Browse Statement PDF'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C3AED),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
             ),
           ),
+        ),
 
-          // Dropdown Popover / Expanded Menu (matching media_1790840495885.png)
-          if (_isBankDropdownOpen) ...[
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF151D2C),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF26324A)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Search Box
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: TextField(
-                      controller: _bankSearchController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      onChanged: (val) => setState(() => _bankSearchText = val),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: 'Search',
-                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                        prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF64748B)),
-                        prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        suffixIcon: _bankSearchText.isNotEmpty
-                            ? GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _bankSearchText = '';
-                                    _bankSearchController.clear();
-                                  });
-                                },
-                                child: const Icon(Icons.close, size: 16, color: Color(0xFF94A3B8)),
-                              )
-                            : null,
-                        suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1, color: Color(0xFF26324A)),
-
-                  // Category Header: ALL COUNTRY / ALL LOCAL BANKS
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-                    child: const Text(
-                      'ALL LOCAL BANKS',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF64748B),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-
-                  // Filtered List of Banks
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 280),
-                    child: _filteredBanks.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Center(
-                              child: Text(
-                                'No matching banks found',
-                                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            shrinkWrap: true,
-                            itemCount: _filteredBanks.length,
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            itemBuilder: (context, index) {
-                              final bank = _filteredBanks[index];
-                              final isSelected = bank.code == _selectedBank.code;
-
-                              return InkWell(
-                                onTap: () {
-                                  _onSelectBank(bank);
-                                  setState(() {
-                                    _isBankDropdownOpen = false;
-                                    _bankSearchText = '';
-                                    _bankSearchController.clear();
-                                  });
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? const Color(0xFF1E293B)
-                                        : Colors.transparent,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      _buildBankLogo(bank, size: 28),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Row(
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                bank.nameEn,
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 13.5,
-                                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              bank.nameAr,
-                                              style: TextStyle(
-                                                color: isSelected ? bank.accentColor : const Color(0xFF64748B),
-                                                fontSize: 11.5,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              '+${bank.shortName}',
-                                              style: const TextStyle(
-                                                color: Color(0xFF64748B),
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (isSelected)
-                                        const Icon(
-                                          Icons.check,
-                                          size: 18,
-                                          color: Color(0xFF94A3B8),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                  const SizedBox(height: 6),
-                ],
-              ),
+        // Action CTA: Parse & Extract
+        if (_selectedPdfFile != null) ...[
+          const SizedBox(height: 18),
+          ElevatedButton.icon(
+            onPressed: _parsePdf,
+            icon: const Icon(Icons.auto_awesome, size: 18),
+            label: Text(
+              'Parse & Extract ${_selectedBank.shortName} Transactions',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
-          ],
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 
-  Widget _buildBankLogo(LocalBank bank, {double size = 42}) {
+  // ============================================================
+  // SCREEN 4: STATEMENT INSPECTION & CONFIRM (MATCHING STEP 3)
+  // ============================================================
+  Widget _buildInspectionScreen() {
+    if (_pdfParseResult == null) return _buildStatementUploadScreen();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
+      children: [
+        // Top Row: Back to Upload & Bank Badge
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _extractorFlow = ExtractorFlowStep.uploadStatement),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                child: Row(
+                  children: const [
+                    Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF94A3B8)),
+                    SizedBox(width: 4),
+                    Text('Upload Another', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _confirmPdfImport,
+              icon: const Icon(Icons.cloud_done, size: 16),
+              label: const Text('Save & Categorize', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Metrics Grid
+        Row(
+          children: [
+            _buildMetricBox('Total Extracted', '${_pdfParseResult!.transactions.length} txns', Colors.white),
+            const SizedBox(width: 8),
+            _buildMetricBox('Quality Score', '${_pdfParseResult!.extractionConfidence}% PASS', const Color(0xFF10B981)),
+            const SizedBox(width: 8),
+            _buildMetricBox('Bank Target', _selectedBank.shortName, _selectedBank.accentColor),
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        // Extracted Transactions List
+        const Text('Extracted Transactions', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+        const SizedBox(height: 10),
+        ..._pdfParseResult!.transactions.map((tx) => _buildTransactionCard(tx)),
+      ],
+    );
+  }
+
+  // ============================================================
+  // BANK LOGO WIDGET (USES OFFICIAL LOGO ASSETS)
+  // ============================================================
+  Widget _buildBankLogo(LocalBank bank, {double size = 42, bool circular = false}) {
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            bank.primaryColor,
-            bank.secondaryColor,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(size * 0.28),
-        border: Border.all(
-          color: bank.accentColor.withValues(alpha: 0.6),
-          width: 1.5,
-        ),
+        color: Colors.white,
+        borderRadius: circular ? BorderRadius.circular(size / 2) : BorderRadius.circular(size * 0.28),
         boxShadow: [
           BoxShadow(
-            color: bank.primaryColor.withValues(alpha: 0.35),
-            blurRadius: 6,
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 5,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Padding(
-            padding: EdgeInsets.all(size * 0.08),
-            child: _buildBankEmblemIcon(bank, size),
+      child: ClipRRect(
+        borderRadius: circular ? BorderRadius.circular(size / 2) : BorderRadius.circular(size * 0.24),
+        child: Padding(
+          padding: EdgeInsets.all(size * 0.12),
+          child: Image.asset(
+            bank.logoAsset,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => _buildBankEmblemIcon(bank, size),
           ),
         ),
       ),
@@ -1091,7 +1373,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
             Text(
               'BM',
               style: TextStyle(
-                color: Colors.white,
+                color: Colors.black,
                 fontWeight: FontWeight.w900,
                 fontSize: size * 0.22,
                 letterSpacing: -0.3,
@@ -1104,349 +1386,22 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.sailing_rounded, color: bank.accentColor, size: size * 0.42),
+            Icon(Icons.sailing_rounded, color: bank.primaryColor, size: size * 0.42),
             Text(
               'NBO',
               style: TextStyle(
-                color: bank.accentColor,
+                color: bank.primaryColor,
                 fontWeight: FontWeight.w900,
                 fontSize: size * 0.22,
                 letterSpacing: 0.2,
-                height: 1.0,
-              ),
-            ),
-          ],
-        );
-      case 'BANK_DHOFAR':
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.waves, color: bank.accentColor, size: size * 0.42),
-            Text(
-              'BD',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: size * 0.22,
-                letterSpacing: -0.3,
-                height: 1.0,
-              ),
-            ),
-          ],
-        );
-      case 'OAB':
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.account_balance, color: Colors.white, size: size * 0.42),
-            Text(
-              'OAB',
-              style: TextStyle(
-                color: bank.accentColor,
-                fontWeight: FontWeight.w900,
-                fontSize: size * 0.22,
-                letterSpacing: 0.2,
-                height: 1.0,
-              ),
-            ),
-          ],
-        );
-      case 'SOHAR_INTL':
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.diamond_outlined, color: Colors.white, size: size * 0.42),
-            Text(
-              'SI',
-              style: TextStyle(
-                color: bank.accentColor,
-                fontWeight: FontWeight.w900,
-                fontSize: size * 0.20,
-                letterSpacing: -0.2,
-                height: 1.0,
-              ),
-            ),
-          ],
-        );
-      case 'AHLI_BANK':
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.security, color: bank.accentColor, size: size * 0.42),
-            Text(
-              'AB',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: size * 0.20,
-                letterSpacing: 0.2,
-                height: 1.0,
-              ),
-            ),
-          ],
-        );
-      case 'BANK_NIZWA':
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.auto_awesome, color: bank.accentColor, size: size * 0.42),
-            Text(
-              'BN',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: size * 0.20,
-                letterSpacing: -0.2,
-                height: 1.0,
-              ),
-            ),
-          ],
-        );
-      case 'ALIZZ_ISLAMIC':
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.stars_rounded, color: bank.accentColor, size: size * 0.42),
-            Text(
-              'AIB',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: size * 0.18,
-                letterSpacing: -0.2,
                 height: 1.0,
               ),
             ),
           ],
         );
       default:
-        return Icon(bank.defaultIcon, color: Colors.white, size: size * 0.45);
+        return Icon(bank.defaultIcon, color: bank.primaryColor, size: size * 0.45);
     }
-  }
-
-  // ============================================================
-  // STEP 2: UPLOAD STATEMENT PDF (TAILORED TO SELECTED BANK)
-  // ============================================================
-  Widget _buildUploadStatementStep() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF121824),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF26324A)),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Step 2 Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
-                ),
-                child: const Text(
-                  'STEP 2',
-                  style: TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Upload ${_selectedBank.nameEn} Statement',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _selectedBank.primaryColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: _selectedBank.primaryColor.withValues(alpha: 0.5)),
-                ),
-                child: Text(
-                  _selectedBank.badgeText,
-                  style: TextStyle(
-                    color: _selectedBank.accentColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Target profile: ${_selectedBank.formatDescription}',
-            style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-          ),
-          const SizedBox(height: 16),
-
-          // Upload Drop Zone
-          InkWell(
-            onTap: _pickPdf,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF151D2C),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _selectedPdfFile != null ? const Color(0xFF10B981) : const Color(0xFF26324A),
-                  width: 1.5,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: _selectedBank.primaryColor.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.cloud_upload_outlined,
-                      size: 36,
-                      color: _selectedBank.accentColor,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _selectedPdfFile != null ? _selectedPdfFile!.name : 'Choose PDF Statement',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _selectedPdfFile != null
-                        ? '${(_selectedPdfFile!.size / 1024).toStringAsFixed(1)} KB · Ready for extraction'
-                        : 'Official ${_selectedBank.nameEn} multi-page statement (.pdf)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _selectedPdfFile != null ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  ElevatedButton.icon(
-                    onPressed: _pickPdf,
-                    icon: const Icon(Icons.folder_open, size: 16),
-                    label: Text(_selectedPdfFile != null ? 'Change PDF File' : 'Browse Files'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _selectedBank.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // If File is Selected, show Parse Button
-          if (_selectedPdfFile != null) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _parsePdf,
-                icon: const Icon(Icons.auto_awesome, size: 18),
-                label: Text(
-                  'Parse & Extract ${_selectedBank.shortName} Transactions',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 2,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // STEP 3: DATA INSPECTION & SAVE TO SYSTEM
-  // ============================================================
-  Widget _buildInspectionStep() {
-    if (_pdfParseResult == null) return const SizedBox.shrink();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF121824),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _selectedBank.primaryColor.withValues(alpha: 0.5)),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Step 3 Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.4)),
-                    ),
-                    child: const Text(
-                      'STEP 3',
-                      style: TextStyle(color: Color(0xFFA78BFA), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Extracted Data Inspection',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ],
-              ),
-              ElevatedButton.icon(
-                onPressed: _confirmPdfImport,
-                icon: const Icon(Icons.cloud_done, size: 16),
-                label: const Text('Save & Categorize', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Metrics Grid
-          Row(
-            children: [
-              _buildMetricBox('Total Extracted', '${_pdfParseResult!.transactions.length} txns', Colors.white),
-              const SizedBox(width: 8),
-              _buildMetricBox('Quality Score', '${_pdfParseResult!.extractionConfidence}% PASS', const Color(0xFF10B981)),
-              const SizedBox(width: 8),
-              _buildMetricBox('Bank Target', _selectedBank.shortName, _selectedBank.accentColor),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Transactions List
-          ..._pdfParseResult!.transactions.map((tx) => _buildTransactionCard(tx)),
-        ],
-      ),
-    );
   }
 
   Widget _buildMetricBox(String title, String value, Color valueColor) {
@@ -2112,3 +2067,31 @@ class _LuxuryDonutPainter extends CustomPainter {
   }
 }
 
+class _DashedArcPainter extends CustomPainter {
+  final Color color;
+  _DashedArcPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    final path = Path();
+    path.moveTo(0, size.height);
+    path.quadraticBezierTo(size.width / 2, -size.height * 0.35, size.width, size.height);
+
+    for (final metric in path.computeMetrics()) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        final next = math.min(distance + 6.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance = next + 6.0;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}

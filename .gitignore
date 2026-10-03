@@ -34,3 +34,6 @@ ThemarIP.App/android/key.properties
 .env
 .env.*
 !.env.example
+.local/
+ThemarIP-Production.apk
+ThemarIP.Admin/themarip.apk

@@ -467,17 +467,27 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       title: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(7),
+            width: 32,
+            height: 32,
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+              color: Colors.black,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.5)),
+              border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.4), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF34D399).withValues(alpha: 0.15),
+                  blurRadius: 6,
+                ),
+              ],
             ),
-            child: Image.asset(
-              'assets/themarip_logo.png',
-              width: 18,
-              height: 18,
-              errorBuilder: (_, _, _) => const Icon(Icons.description, size: 18, color: Color(0xFF7C3AED)),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: Image.asset(
+                'assets/themarip_logo.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => const Icon(Icons.spa_rounded, size: 16, color: Color(0xFF34D399)),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -1003,28 +1013,30 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                     width: 94,
                     height: 94,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      color: Colors.black,
                       borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: const Color(0xFFA78BFA), width: 2),
+                      border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.6), width: 2),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF7C3AED).withValues(alpha: 0.4),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
+                          color: const Color(0xFF34D399).withValues(alpha: 0.25),
+                          blurRadius: 18,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Image.asset(
-                        'assets/themarip_logo.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const Center(
-                          child: Icon(Icons.account_balance_wallet_rounded, size: 42, color: Colors.white),
+                    child: Center(
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.asset(
+                            'assets/themarip_logo.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const Center(
+                              child: Icon(Icons.spa_rounded, size: 30, color: Color(0xFF34D399)),
+                            ),
+                          ),
                         ),
                       ),
                     ),

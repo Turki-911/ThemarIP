@@ -95,13 +95,33 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: 64,
                     height: 64,
                     decoration: BoxDecoration(
-                      gradient: AppTheme.primaryGradient,
+                      color: Colors.black,
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.5), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF34D399).withValues(alpha: 0.25),
+                          blurRadius: 14,
+                        ),
+                      ],
                     ),
-                    child: const Icon(
-                      Icons.bolt_rounded,
-                      size: 36,
-                      color: Colors.white,
+                    child: Center(
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(
+                            'assets/themarip_logo.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const Icon(
+                              Icons.spa_rounded,
+                              size: 28,
+                              color: Color(0xFF34D399),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

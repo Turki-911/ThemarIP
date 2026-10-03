@@ -335,10 +335,23 @@ class _SplashScreenState extends State<SplashScreen> {
                               ),
                             ],
                           ),
-                          child: const Icon(
-                            Icons.credit_card_rounded,
-                            size: 44,
-                            color: Colors.white,
+                          child: Center(
+                            child: SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.asset(
+                                  'assets/themarip_logo.png',
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.spa_rounded,
+                                    size: 36,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         )
                             .animate()

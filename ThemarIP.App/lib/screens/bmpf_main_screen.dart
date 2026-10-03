@@ -190,7 +190,6 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   List<BmpfCategoryNode> _rawCategories = [];
   String _selectedHierarchyBankCode = 'ALL';
   String _selectedMonthKey = 'ALL'; // 'ALL' or 'YYYY-MM'
-  int _activeBankCardIndex = 0;
   List<Map<String, dynamic>> _userUploadedBanks = [];
   bool _isLoadingCategories = false;
   final Set<String> _expandedCategoryIds = {};
@@ -485,12 +484,9 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   void _applyBankFilter() => _applyFilters();
 
-  void _onSelectHierarchyBank(String bankCode, [int? cardIndex]) {
+  void _onSelectHierarchyBank(String bankCode) {
     setState(() {
       _selectedHierarchyBankCode = bankCode;
-      if (cardIndex != null) {
-        _activeBankCardIndex = cardIndex;
-      }
       _selectedCategoryIndex = null;
       _applyFilters();
     });
@@ -1772,31 +1768,17 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   // MULTI-BANK HIERARCHY FILTER & SPENDING BEHAVIOR ANALYTICS
   // ============================================================
   // ============================================================
-  // MULTI-BANK CARD CAROUSEL & MONTH FILTER SYSTEM (MATCHING IMAGE 3)
+  // ============================================================
+  // MULTI-BANK SOLID SATURATED CARDS & FILTER SYSTEM
   // ============================================================
   Widget _buildBankCardCarousel() {
     final List<Map<String, dynamic>> cardDataList = [];
-
-    final totalAllTx = _rawCategories.fold<int>(0, (sum, c) => sum + c.transactions.length);
-    final totalAllSpent = _rawCategories.fold<double>(0.0, (sum, c) => sum + c.totalAmount);
-
-    // Card 0: Unified / All Connected Banks
-    cardDataList.add({
-      'code': 'ALL',
-      'name': 'All Connected Banks',
-      'shortName': 'ALL',
-      'accountMask': '•••• •••• •••• ALL',
-      'txCount': totalAllTx,
-      'totalSpent': totalAllSpent,
-      'gradient': const [Color(0xFF3B82F6), Color(0xFF6366F1), Color(0xFF8B5CF6)],
-      'logoAsset': null,
-    });
 
     final bankCodesFound = <String>{};
     if (_userUploadedBanks.isNotEmpty) {
       for (final ub in _userUploadedBanks) {
         final code = ub['bankCode']?.toString() ?? '';
-        if (code.isNotEmpty && !bankCodesFound.contains(code)) {
+        if (code.isNotEmpty && code != 'ALL' && !bankCodesFound.contains(code)) {
           bankCodesFound.add(code);
           final bankDef = _findBankByCode(code);
           final spent = (ub['totalSpent'] as num?)?.toDouble() ?? 0.0;
@@ -1805,292 +1787,118 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
             'code': code,
             'name': ub['bankName']?.toString() ?? bankDef?.nameEn ?? code,
             'shortName': bankDef?.shortName ?? code,
-            'accountMask': '•••• •••• •••• ${bankDef?.shortName ?? "OM"}',
             'txCount': txs,
             'totalSpent': spent,
-            'gradient': _getBankCardGradient(code),
             'logoAsset': bankDef?.logoAsset,
           });
         }
       }
-    } else {
-      final bankMap = <String, List<BmpfTransaction>>{};
-      for (final cat in _rawCategories) {
-        for (final tx in cat.transactions) {
+    }
+
+    // Also extract real banks from transactions if not yet listed
+    final bankMap = <String, List<BmpfTransaction>>{};
+    for (final cat in _rawCategories) {
+      for (final tx in cat.transactions) {
+        if (tx.bankCode.isNotEmpty && tx.bankCode != 'ALL') {
           bankMap.putIfAbsent(tx.bankCode, () => []).add(tx);
         }
       }
-      for (final entry in bankMap.entries) {
-        final code = entry.key;
+    }
+    for (final entry in bankMap.entries) {
+      final code = entry.key;
+      if (!bankCodesFound.contains(code)) {
+        bankCodesFound.add(code);
         final bankDef = _findBankByCode(code);
         final spent = entry.value.fold<double>(0.0, (sum, t) => sum + t.amount);
         cardDataList.add({
           'code': code,
           'name': bankDef?.nameEn ?? code,
           'shortName': bankDef?.shortName ?? code,
-          'accountMask': '•••• •••• •••• ${bankDef?.shortName ?? "OM"}',
           'txCount': entry.value.length,
           'totalSpent': spent,
-          'gradient': _getBankCardGradient(code),
           'logoAsset': bankDef?.logoAsset,
         });
       }
     }
 
-    final totalItems = cardDataList.length + 1; // +1 for the Add Bank Card
+    if (cardDataList.isEmpty) {
+      cardDataList.add({
+        'code': 'BANK_MUSCAT',
+        'name': 'Bank Muscat',
+        'shortName': 'BM',
+        'txCount': 0,
+        'totalSpent': 0.0,
+      });
+    }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: 154,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: totalItems,
-            separatorBuilder: (_, _) => const SizedBox(width: 14),
-            itemBuilder: (context, index) {
-              if (index == cardDataList.length) {
-                return _buildAddBankCard();
-              }
-
-              final item = cardDataList[index];
-              final code = item['code'] as String;
-              final isSelected = _selectedHierarchyBankCode.toUpperCase() == code.toUpperCase();
-              final gradient = item['gradient'] as List<Color>;
-              final spent = item['totalSpent'] as double;
-              final txCount = item['txCount'] as int;
-              final bankDef = code == 'ALL' ? null : _findBankByCode(code);
-
-              return GestureDetector(
-                onTap: () => _onSelectHierarchyBank(code, index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  width: 255,
-                  height: 150,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: gradient,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.15),
-                      width: isSelected ? 2.2 : 1.0,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (gradient.first).withValues(alpha: isSelected ? 0.45 : 0.2),
-                        blurRadius: isSelected ? 18 : 10,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Top Row: EMV Chip & Overlapping Circles / Bank Logo
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildEmvChip(),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (bankDef != null) ...[
-                                Container(
-                                  width: 26,
-                                  height: 26,
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: ClipOval(
-                                    child: Image.asset(
-                                      bankDef.logoAsset,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (_, _, _) => Center(
-                                        child: Text(
-                                          bankDef.shortName,
-                                          style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                              _buildCardCircles(),
-                            ],
-                          ),
-                        ],
-                      ),
-
-                      // Middle: Masked Account Number & Amount
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item['accountMask'] as String,
-                            style: TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 2.0,
-                              color: Colors.white.withValues(alpha: 0.85),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${spent.toStringAsFixed(3)} OMR',
-                            style: const TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      // Bottom Row: Bank Name & Tx Count Badge
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item['name'] as String,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                            ),
-                            child: Text(
-                              '$txCount txns',
-                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        // Pagination Dots Underneath Carousel
-        Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(cardDataList.length, (dotIdx) {
-              final isActive = (_selectedHierarchyBankCode.toUpperCase() == (cardDataList[dotIdx]['code'] as String).toUpperCase()) ||
-                  (_activeBankCardIndex == dotIdx);
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: isActive ? 18 : 6,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              );
-            }),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmvChip() {
-    return Container(
-      width: 34,
-      height: 25,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFDE68A), Color(0xFFD4AF37), Color(0xFFB45309)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Container(
-          width: 26,
-          height: 18,
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFF78350F).withValues(alpha: 0.4), width: 0.8),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              Container(width: 0.8, color: const Color(0xFF78350F).withValues(alpha: 0.4)),
-              Container(width: 0.8, color: const Color(0xFF78350F).withValues(alpha: 0.4)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCardCircles() {
     return SizedBox(
-      width: 44,
-      height: 26,
-      child: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.22),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 0,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.16),
-              ),
-            ),
-          ),
-        ],
+      height: 106,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: cardDataList.length + 2, // 1 for 'All' at start + 1 for 'Add' at end
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _buildAllBankIconButton();
+          } else if (index == cardDataList.length + 1) {
+            return _buildAddBankIconButton();
+          } else {
+            return _buildRealBankCard(cardDataList[index - 1]);
+          }
+        },
       ),
     );
   }
 
-  Widget _buildAddBankCard() {
+  Widget _buildAllBankIconButton() {
+    final isLit = _selectedHierarchyBankCode == 'ALL';
+    return GestureDetector(
+      onTap: () => _onSelectHierarchyBank('ALL'),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 66,
+        height: 104,
+        decoration: BoxDecoration(
+          color: isLit ? const Color(0xFF10B981).withValues(alpha: 0.16) : const Color(0xFF131B2E),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isLit ? const Color(0xFF34D399) : const Color(0xFF26324A),
+            width: isLit ? 1.8 : 1.0,
+          ),
+          boxShadow: isLit
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF34D399).withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.grid_view_rounded,
+              color: isLit ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+              size: 24,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'All',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isLit ? FontWeight.bold : FontWeight.w600,
+                color: isLit ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddBankIconButton() {
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -2098,82 +1906,271 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           _extractorFlow = ExtractorFlowStep.selectBank;
         });
       },
-      child: Container(
-        width: 76,
-        height: 150,
-        decoration: BoxDecoration(
-          color: const Color(0xFF161F30),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: const Color(0xFF38BDF8).withValues(alpha: 0.35),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+      child: CustomPaint(
+        painter: _DashedRoundedRectPainter(
+          color: const Color(0xFF34D399),
+          strokeWidth: 1.6,
+          radius: 16,
+          dashLength: 5,
+          gapLength: 4,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF38BDF8).withValues(alpha: 0.3),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-              child: const Icon(
+        child: Container(
+          width: 66,
+          height: 104,
+          decoration: BoxDecoration(
+            color: const Color(0xFF131B2E),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(
                 Icons.add_rounded,
-                color: Color(0xFF38BDF8),
+                color: Color(0xFF34D399),
                 size: 26,
               ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Add\nBank',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF38BDF8),
-                height: 1.2,
+              SizedBox(height: 6),
+              Text(
+                'Add',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF34D399),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  List<Color> _getBankCardGradient(String code) {
+  Widget _buildRealBankCard(Map<String, dynamic> item) {
+    final code = item['code'] as String;
+    final name = item['name'] as String;
+    final spent = item['totalSpent'] as double;
+    final txCount = item['txCount'] as int;
+    final theme = _getBankSolidTheme(code);
+    final Color bgColor = theme['color'] as Color;
+    final Color textColor = theme['textColor'] as Color;
+    final bool isLight = theme['isLight'] as bool;
+    final Color circle1 = theme['circle1'] as Color;
+    final Color circle2 = theme['circle2'] as Color;
+
+    final isAll = _selectedHierarchyBankCode == 'ALL';
+    final isSelected = _selectedHierarchyBankCode.toUpperCase() == code.toUpperCase();
+    final double cardOpacity = (isAll || isSelected) ? 1.0 : 0.35;
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 220),
+      opacity: cardOpacity,
+      child: GestureDetector(
+        onTap: () {
+          if (isSelected) {
+            // Tap it again to return to all
+            _onSelectHierarchyBank('ALL');
+          } else {
+            // Filter to this bank
+            _onSelectHierarchyBank(code);
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          width: 240,
+          height: 104,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(18),
+            border: isSelected ? Border.all(color: Colors.white, width: 2.2) : null,
+            boxShadow: [
+              BoxShadow(
+                color: bgColor.withValues(alpha: isSelected ? 0.45 : 0.22),
+                blurRadius: isSelected ? 16 : 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Stack(
+              children: [
+                // Top-right decorative bubble circle
+                Positioned(
+                  right: -15,
+                  top: -20,
+                  child: Container(
+                    width: 95,
+                    height: 95,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: circle1,
+                    ),
+                  ),
+                ),
+                // Bottom-right decorative bubble circle
+                Positioned(
+                  right: 25,
+                  bottom: -32,
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: circle2,
+                    ),
+                  ),
+                ),
+                // Card Inner Contents
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Top Row: Bank Name on Left, Bank Emblem Icon on Right
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: textColor,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isLight
+                                  ? Colors.black.withValues(alpha: 0.08)
+                                  : Colors.white.withValues(alpha: 0.22),
+                            ),
+                            child: Icon(
+                              Icons.account_balance_outlined,
+                              size: 15,
+                              color: textColor,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Bottom Row: Large Amount with Txns label beside it
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            spent.toStringAsFixed(3),
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: textColor,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'OMR',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: textColor.withValues(alpha: 0.9),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '• $txCount Txns',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: textColor.withValues(alpha: 0.75),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _getBankSolidTheme(String code) {
     final upper = code.toUpperCase();
     if (upper.contains('MUSCAT')) {
-      return const [Color(0xFF881337), Color(0xFFBE123C), Color(0xFF4C0519)];
-    } else if (upper.contains('NBO')) {
-      return const [Color(0xFF002B49), Color(0xFF0A3D62), Color(0xFF1E3A8A)];
+      return {
+        'color': const Color(0xFFFF486E), // Hot coral
+        'isLight': false,
+        'textColor': Colors.white,
+        'circle1': Colors.white.withValues(alpha: 0.18),
+        'circle2': Colors.black.withValues(alpha: 0.10),
+      };
     } else if (upper.contains('DHOFAR')) {
-      return const [Color(0xFF065F46), Color(0xFF047857), Color(0xFF064E3B)];
+      return {
+        'color': const Color(0xFFFFC038), // Warm golden yellow
+        'isLight': true,
+        'textColor': const Color(0xFF1A1A1A), // Dark text for yellow card
+        'circle1': const Color(0xFFFFAE00).withValues(alpha: 0.35),
+        'circle2': const Color(0xFFE09200).withValues(alpha: 0.25),
+      };
+    } else if (upper.contains('NBO')) {
+      return {
+        'color': const Color(0xFF0284C7), // Saturated cyan / royal blue
+        'isLight': false,
+        'textColor': Colors.white,
+        'circle1': Colors.white.withValues(alpha: 0.20),
+        'circle2': Colors.black.withValues(alpha: 0.12),
+      };
     } else if (upper.contains('SOHAR')) {
-      return const [Color(0xFF9F1239), Color(0xFFBE123C), Color(0xFFE11D48)];
+      return {
+        'color': const Color(0xFFF97316), // Vivid orange
+        'isLight': false,
+        'textColor': Colors.white,
+        'circle1': Colors.white.withValues(alpha: 0.18),
+        'circle2': Colors.black.withValues(alpha: 0.10),
+      };
     } else if (upper.contains('AHLI')) {
-      return const [Color(0xFF4A0014), Color(0xFF70001E), Color(0xFF881337)];
+      return {
+        'color': const Color(0xFFBE123C), // Burgundy
+        'isLight': false,
+        'textColor': Colors.white,
+        'circle1': Colors.white.withValues(alpha: 0.18),
+        'circle2': Colors.black.withValues(alpha: 0.10),
+      };
     } else if (upper.contains('NIZWA')) {
-      return const [Color(0xFF065F46), Color(0xFF047857), Color(0xFF022C22)];
+      return {
+        'color': const Color(0xFF059669), // Emerald
+        'isLight': false,
+        'textColor': Colors.white,
+        'circle1': Colors.white.withValues(alpha: 0.18),
+        'circle2': Colors.black.withValues(alpha: 0.10),
+      };
     } else if (upper.contains('OAB')) {
-      return const [Color(0xFF004B87), Color(0xFF002D62), Color(0xFF0F172A)];
+      return {
+        'color': const Color(0xFF1D4ED8), // Cobalt
+        'isLight': false,
+        'textColor': Colors.white,
+        'circle1': Colors.white.withValues(alpha: 0.18),
+        'circle2': Colors.black.withValues(alpha: 0.10),
+      };
     } else {
-      return const [Color(0xFF1E293B), Color(0xFF334155), Color(0xFF0F172A)];
+      return {
+        'color': const Color(0xFF8B5CF6), // Electric violet
+        'isLight': false,
+        'textColor': Colors.white,
+        'circle1': Colors.white.withValues(alpha: 0.18),
+        'circle2': Colors.black.withValues(alpha: 0.10),
+      };
     }
   }
 
@@ -2315,9 +2312,46 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                 ),
               ],
             ),
-            IconButton(
-              icon: const Icon(Icons.refresh, color: Color(0xFF7C3AED)),
-              onPressed: _fetchCategoryHierarchy,
+            InkWell(
+              onTap: () {
+                _onSelectHierarchyBank('ALL');
+                _fetchCategoryHierarchy();
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _selectedHierarchyBankCode == 'ALL'
+                      ? const Color(0xFF10B981).withValues(alpha: 0.16)
+                      : const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _selectedHierarchyBankCode == 'ALL'
+                        ? const Color(0xFF34D399)
+                        : const Color(0xFF334155),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.sync_rounded,
+                      size: 14,
+                      color: _selectedHierarchyBankCode == 'ALL' ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'All Connected Banks',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _selectedHierarchyBankCode == 'ALL' ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -2930,4 +2964,50 @@ class _DashedArcPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _DashedRoundedRectPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double radius;
+  final double dashLength;
+  final double gapLength;
+
+  _DashedRoundedRectPainter({
+    required this.color,
+    this.strokeWidth = 1.6,
+    this.radius = 16.0,
+    this.dashLength = 5.0,
+    this.gapLength = 4.0,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(strokeWidth / 2, strokeWidth / 2, size.width - strokeWidth, size.height - strokeWidth),
+      Radius.circular(radius),
+    );
+
+    final path = Path()..addRRect(rrect);
+
+    for (final metric in path.computeMetrics()) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        final next = math.min(distance + dashLength, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance = next + gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRoundedRectPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.strokeWidth != strokeWidth ||
+      oldDelegate.radius != radius;
 }

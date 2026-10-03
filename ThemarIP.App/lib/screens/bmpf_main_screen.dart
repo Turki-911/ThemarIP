@@ -1847,12 +1847,18 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Consolidated Multi-Bank Behavior',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      Text(
+                        _userUploadedBanks.length > 1
+                            ? 'Consolidated Multi-Bank Behavior'
+                            : 'Spending Behavior Overview',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       Text(
-                        'Combined activity across ${_userUploadedBanks.isNotEmpty ? _userUploadedBanks.length : 2} local bank statements',
+                        _userUploadedBanks.length > 1
+                            ? 'Combined activity across ${_userUploadedBanks.length} local bank statements'
+                            : (_userUploadedBanks.isNotEmpty
+                                ? 'Activity from ${_userUploadedBanks.first['bankName'] ?? 'uploaded statement'}'
+                                : 'Activity from uploaded statement'),
                         style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                       ),
                     ],

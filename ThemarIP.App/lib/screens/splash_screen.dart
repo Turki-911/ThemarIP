@@ -143,7 +143,7 @@ class _SplashScreenState extends State<SplashScreen> {
               style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: InputDecoration(
                 labelText: 'Host IP or Domain',
-                hintText: '172.20.10.5',
+                hintText: ApiConfig.defaultLanHost,
                 prefixIcon: const Icon(Icons.link_rounded),
                 suffixText: ':5267',
                 border: OutlineInputBorder(
@@ -168,10 +168,10 @@ class _SplashScreenState extends State<SplashScreen> {
                   onPressed: () => controller.text = ApiConfig.livePublicApiUrl,
                 ),
                 ActionChip(
-                  label: const Text('172.20.10.5 (Mac)'),
+                  label: Text('${ApiConfig.defaultLanHost} (Mac)'),
                   backgroundColor: AppTheme.primaryPurple.withValues(alpha: 0.2),
                   labelStyle: const TextStyle(fontSize: 11, color: AppTheme.primaryPurple, fontWeight: FontWeight.w600),
-                  onPressed: () => controller.text = '172.20.10.5',
+                  onPressed: () => controller.text = ApiConfig.defaultLanHost,
                 ),
                 ActionChip(
                   label: const Text('localhost'),

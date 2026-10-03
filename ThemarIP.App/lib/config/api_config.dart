@@ -2,10 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
-  // Default Mac LAN IP address (detected on en0 for iPhone Wi-Fi/Hotspot)
-  static const String defaultLanHost = '172.20.10.5';
+  // Default Mac LAN IP address (detected on current Wi-Fi)
+  static const String defaultLanHost = '192.168.0.201';
   static const String livePublicApiUrl =
-      'https://then-eyes-comm-dicke.trycloudflare.com/api';
+      'https://public-applications-hartford-title.trycloudflare.com/api';
   static String? _customHost;
 
   static const String _prefKeyHost = 'themarip_custom_api_host';
@@ -23,8 +23,8 @@ class ApiConfig {
       final saved = prefs.getString(_prefKeyHost);
       if (saved != null && saved.trim().isNotEmpty) {
         final val = saved.trim();
-        // Purge old expired quick tunnels from local device storage
-        if (val.contains('trycloudflare.com')) {
+        // Purge old expired quick tunnels and stale hotspot IP from local device storage
+        if (val.contains('trycloudflare.com') || val == '172.20.10.5') {
           await prefs.remove(_prefKeyHost);
           _customHost = null;
         } else {

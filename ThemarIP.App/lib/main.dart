@@ -28,9 +28,10 @@ class BmpfApp extends StatelessWidget {
         '/terms': (context) => const TermsScreen(),
         '/register': (context) => const RegisterScreen(),
         '/login': (context) => const LoginScreen(),
-        '/upload': (context) => const BmpfMainScreen(initialPageIndex: 0),
-        '/categories': (context) => const BmpfMainScreen(initialPageIndex: 1),
-        '/hierarchy': (context) => const BmpfMainScreen(initialPageIndex: 1),
+        '/upload': (context) => const BmpfMainScreen(initialPageIndex: 2),
+        '/categories': (context) => const BmpfMainScreen(initialPageIndex: 0),
+        '/hierarchy': (context) => const BmpfMainScreen(initialPageIndex: 0),
+        '/profile': (context) => const BmpfMainScreen(initialPageIndex: 1),
       },
     );
   }

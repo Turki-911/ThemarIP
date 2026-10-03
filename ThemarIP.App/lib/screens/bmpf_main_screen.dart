@@ -222,7 +222,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     _fetchCategoryHierarchy().then((_) {
       if (mounted && !_hasUploadedStatement) {
         setState(() {
-          _selectedPageIndex = 0; // First time user must not bypass Extractor
+          _selectedPageIndex = 2; // First time user must not bypass Extractor
         });
       }
     });
@@ -232,14 +232,14 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   void didUpdateWidget(covariant BmpfMainScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialPageIndex != widget.initialPageIndex) {
-      if (!_hasUploadedStatement && widget.initialPageIndex == 1) {
+      if (!_hasUploadedStatement && widget.initialPageIndex == 0) {
         _showToast('Please upload your first bank statement in Extractor to unlock Hierarchy analytics.');
         return;
       }
       setState(() {
         _selectedPageIndex = widget.initialPageIndex;
       });
-      if (_selectedPageIndex == 1) {
+      if (_selectedPageIndex == 0) {
         _fetchCategoryHierarchy();
       }
     }
@@ -369,7 +369,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         _showToast('${_selectedBank.nameEn} statement successfully imported! Redirecting to Categorization...');
         _fetchLiveDbCount();
         setState(() {
-          _selectedPageIndex = 1;
+          _selectedPageIndex = 0;
         });
         _fetchCategoryHierarchy();
         if (!mounted) return;
@@ -606,16 +606,18 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         children: [
           // Main Scrollable Page Content
           Positioned.fill(
-            child: _selectedPageIndex == 0 ? _buildExtractorPage() : _buildCategoriesPage(),
+            child: _buildCurrentPage(),
           ),
 
-          // Floating Bottom Navigation Bar (Matching Image 3)
+          // Floating Bottom Navigation Bar (Centered & Compact like Image 2)
           Positioned(
-            left: 20,
-            right: 20,
-            bottom: 20,
+            left: 0,
+            right: 0,
+            bottom: 24,
             child: SafeArea(
-              child: _buildFloatingBottomNavBar(),
+              child: Center(
+                child: _buildFloatingBottomNavBar(),
+              ),
             ),
           ),
 
@@ -751,15 +753,19 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   }
 
   // ============================================================
-  // FLOATING BOTTOM NAVIGATION BAR (MATCHING IMAGE 3)
+  // FLOATING BOTTOM NAVIGATION BAR (COMPACT CAPSULE MATCHING IMAGE 2)
   // ============================================================
   Widget _buildFloatingBottomNavBar() {
+    final isHierarchy = _selectedPageIndex == 0;
+    final isProfile = _selectedPageIndex == 1;
+
     return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      width: 172,
+      height: 66,
+      padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: const Color(0xFF161F30).withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(30),
+        color: const Color(0xFF161F30).withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(33),
         border: Border.all(color: const Color(0xFF28364F), width: 1.2),
         boxShadow: [
           BoxShadow(
@@ -771,41 +777,49 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       ),
       child: Row(
         children: [
-          // Extractor Tab
+          // Hierarchy Tab (Left)
           Expanded(
             child: GestureDetector(
               onTap: () {
-                setState(() {
-                  _selectedPageIndex = 0;
-                });
+                if (!_hasUploadedStatement) {
+                  _showToast('Please upload your first bank statement to unlock Hierarchy analytics.');
+                  return;
+                }
+                setState(() => _selectedPageIndex = 0);
+                if (_categories.isEmpty) {
+                  _fetchCategoryHierarchy();
+                }
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: _selectedPageIndex == 0
+                  color: isHierarchy
                       ? const Color(0xFF10B981).withValues(alpha: 0.22)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(24),
-                  border: _selectedPageIndex == 0
-                      ? Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6))
+                  borderRadius: BorderRadius.circular(28),
+                  border: isHierarchy
+                      ? Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.6))
                       : null,
                 ),
-                child: Row(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.account_balance_wallet_rounded,
-                      size: 18,
-                      color: _selectedPageIndex == 0 ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                      _hasUploadedStatement ? Icons.explore_rounded : Icons.lock_outline_rounded,
+                      size: 20,
+                      color: isHierarchy
+                          ? const Color(0xFF34D399)
+                          : (_hasUploadedStatement ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(height: 3),
                     Text(
-                      'Extractor',
+                      'Hierarchy',
                       style: TextStyle(
-                        color: _selectedPageIndex == 0 ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
-                        fontSize: 12.5,
-                        fontWeight: _selectedPageIndex == 0 ? FontWeight.bold : FontWeight.w600,
+                        fontSize: 10.5,
+                        fontWeight: isHierarchy ? FontWeight.bold : FontWeight.w600,
+                        color: isHierarchy
+                            ? const Color(0xFF34D399)
+                            : (_hasUploadedStatement ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                       ),
                     ),
                   ],
@@ -813,56 +827,40 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          // Hierarchy Tab (Locked if user has not uploaded any bank statement)
+          const SizedBox(width: 4),
+
+          // Profile Tab (Right)
           Expanded(
             child: GestureDetector(
               onTap: () {
-                if (!_hasUploadedStatement) {
-                  _showToast(
-                    'Please upload your first bank statement in Extractor to unlock Hierarchy analytics.',
-                    isError: false,
-                  );
-                  return;
-                }
-                setState(() {
-                  _selectedPageIndex = 1;
-                });
-                if (_categories.isEmpty) {
-                  _fetchCategoryHierarchy();
-                }
+                setState(() => _selectedPageIndex = 1);
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: _selectedPageIndex == 1
-                      ? const Color(0xFF7C3AED).withValues(alpha: 0.25)
+                  color: isProfile
+                      ? const Color(0xFF10B981).withValues(alpha: 0.22)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(24),
-                  border: _selectedPageIndex == 1
-                      ? Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.6))
+                  borderRadius: BorderRadius.circular(28),
+                  border: isProfile
+                      ? Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.6))
                       : null,
                 ),
-                child: Row(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      _hasUploadedStatement ? Icons.explore_rounded : Icons.lock_outline_rounded,
-                      size: 18,
-                      color: _selectedPageIndex == 1
-                          ? const Color(0xFFA78BFA)
-                          : (_hasUploadedStatement ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                      Icons.person_rounded,
+                      size: 20,
+                      color: isProfile ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(height: 3),
                     Text(
-                      'Hierarchy',
+                      'Profile',
                       style: TextStyle(
-                        color: _selectedPageIndex == 1
-                            ? const Color(0xFFA78BFA)
-                            : (_hasUploadedStatement ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                        fontSize: 12.5,
-                        fontWeight: _selectedPageIndex == 1 ? FontWeight.bold : FontWeight.w600,
+                        fontSize: 10.5,
+                        fontWeight: isProfile ? FontWeight.bold : FontWeight.w600,
+                        color: isProfile ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
                       ),
                     ),
                   ],
@@ -872,6 +870,309 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCurrentPage() {
+    switch (_selectedPageIndex) {
+      case 0:
+        return _buildCategoriesPage();
+      case 1:
+        return _buildProfilePage();
+      case 2:
+        return _buildExtractorPage();
+      default:
+        return _buildCategoriesPage();
+    }
+  }
+
+  // ============================================================
+  // PAGE 3: USER PROFILE & SETTINGS
+  // ============================================================
+  Widget _buildProfilePage() {
+    final user = _currentUser;
+    final userName = (user?.fullName.isNotEmpty == true) ? user!.fullName : 'Turki';
+    final userEmail = (user?.email.isNotEmpty == true) ? user!.email : 'turki@themar.om';
+    final initial = userName.isNotEmpty ? userName[0].toUpperCase() : 'T';
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
+      children: [
+        // Top Title
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Account Profile',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Regulated financial identity & connected banks',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.verified_rounded, size: 14, color: Color(0xFF34D399)),
+                  SizedBox(width: 4),
+                  Text('CBO Verified', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF34D399))),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // User Identity Card
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1A2338), Color(0xFF121826)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF28364F)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF10B981), Color(0xFF047857)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    initial,
+                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.white),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      userEmail,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Personal Account Tier 1',
+                            style: TextStyle(fontSize: 10, color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Connected Banks Section
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'CONNECTED BANK STATEMENTS',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF34D399), letterSpacing: 0.8),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _selectedPageIndex = 2;
+                  _extractorFlow = ExtractorFlowStep.selectBank;
+                });
+              },
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 16, color: Color(0xFF38BDF8)),
+              label: const Text('Add Bank', style: TextStyle(fontSize: 12, color: Color(0xFF38BDF8), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // List of banks
+        if (_userUploadedBanks.isNotEmpty)
+          ..._userUploadedBanks.map((ub) {
+            final bCode = ub['bankCode']?.toString() ?? '';
+            final bankDef = _findBankByCode(bCode);
+            final spent = (ub['totalSpent'] as num?)?.toDouble() ?? 0.0;
+            final txCount = (ub['txCount'] as num?)?.toInt() ?? 0;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF131B2E),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF26324A)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                    child: ClipOval(
+                      child: Image.asset(
+                        bankDef?.logoAsset ?? 'assets/banks/bank_muscat.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Icon(Icons.account_balance, color: Colors.black, size: 18),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ub['bankName']?.toString() ?? bankDef?.nameEn ?? bCode,
+                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        Text(
+                          '$txCount transactions • ${spent.toStringAsFixed(3)} OMR',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text('Connected', style: TextStyle(fontSize: 10, color: Color(0xFF34D399), fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          })
+        else
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131B2E),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF26324A)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, color: Color(0xFF94A3B8), size: 20),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'No bank statements uploaded yet. Tap "Add Bank" to connect your first statement.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 24),
+
+        // CBO Compliance & Security Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1E293B)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.shield_outlined, size: 18, color: Color(0xFF34D399)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Security & Central Bank of Oman (CBO)',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '• Themar Personal Finance Management (BMPF) operates under official Central Bank of Oman sandbox guidelines.\n• Read-only statement extraction — your banking credentials and passwords are never collected.\n• All analytics are processed securely with AES-256 data protection.',
+                style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8), height: 1.55),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Sign Out Button
+        OutlinedButton.icon(
+          onPressed: _logout,
+          icon: const Icon(Icons.logout_rounded, size: 18, color: Color(0xFFEF4444)),
+          label: const Text('Sign Out of ThemarIP', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
+            minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        const Center(
+          child: Text(
+            'ThemarIP v2.4 • Central Bank of Oman Sandbox',
+            style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+          ),
+        ),
+      ],
     );
   }
 
@@ -898,10 +1199,22 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
       children: [
-        // Top Row: Help button
+        // Top Row: Back button (if has statements) + Help button
         Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            if (_hasUploadedStatement)
+              TextButton.icon(
+                icon: const Icon(Icons.arrow_back_rounded, size: 18, color: Color(0xFF94A3B8)),
+                label: const Text('Back to Dashboard', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w600)),
+                onPressed: () {
+                  setState(() {
+                    _selectedPageIndex = 0;
+                  });
+                },
+              )
+            else
+              const SizedBox.shrink(),
             TextButton(
               onPressed: _showHelpDialog,
               child: const Text(
@@ -1902,7 +2215,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     return GestureDetector(
       onTap: () {
         setState(() {
-          _selectedPageIndex = 0;
+          _selectedPageIndex = 2;
           _extractorFlow = ExtractorFlowStep.selectBank;
         });
       },

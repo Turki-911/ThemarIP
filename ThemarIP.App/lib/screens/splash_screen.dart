@@ -90,8 +90,8 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (token != null && token.isNotEmpty) {
-      // Returning authorized user -> Ingestion & Statement upload
-      Navigator.of(context).pushReplacementNamed('/upload');
+      // Returning authorized user -> Dashboard (or Extractor if no statements)
+      Navigator.of(context).pushReplacementNamed('/categories');
     } else {
       // First-time user -> Onboarding walkthrough
       Navigator.of(context).pushReplacementNamed('/onboarding');
@@ -102,7 +102,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final token = await AuthService.getToken();
     if (!mounted) return;
     if (token != null && token.isNotEmpty) {
-      Navigator.of(context).pushReplacementNamed('/upload');
+      Navigator.of(context).pushReplacementNamed('/categories');
     } else {
       Navigator.of(context).pushReplacementNamed('/onboarding');
     }

@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacementNamed('/upload');
+      Navigator.of(context).pushReplacementNamed('/categories');
     } catch (e) {
       String msg = 'Invalid email or password. Please check your credentials.';
       if (e is DioException) {

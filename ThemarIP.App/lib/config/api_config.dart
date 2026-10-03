@@ -23,8 +23,10 @@ class ApiConfig {
       final saved = prefs.getString(_prefKeyHost);
       if (saved != null && saved.trim().isNotEmpty) {
         final val = saved.trim();
-        // Purge old expired quick tunnels and stale hotspot IP from local device storage
-        if (val.contains('trycloudflare.com') || val == '172.20.10.5') {
+        // Purge old expired quick tunnels or old hotspot IP
+        if (val.contains('then-eyes-comm-dicke') ||
+            val.contains('brick-concerned') ||
+            val == '172.20.10.5') {
           await prefs.remove(_prefKeyHost);
           _customHost = null;
         } else {
@@ -64,19 +66,9 @@ class ApiConfig {
       }
       return 'localhost';
     }
-    // Production release mobile builds (shared APK, iOS) always use live public backend
-    if (kReleaseMode) {
-      return livePublicApiUrl;
-    }
-    // Android emulator routes to host via 10.0.2.2
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return '10.0.2.2';
-    }
-    // iOS physical device / Simulator: use Mac LAN IP
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return defaultLanHost;
-    }
-    return 'localhost';
+    // Default to the live public HTTPS backend for all mobile devices (iOS & Android)
+    // so testers, family, and friends connect seamlessly over public internet (4G/5G/Wi-Fi).
+    return livePublicApiUrl;
   }
 
   /// Returns the full base API URL (e.g. http://172.20.10.5:5267/api)

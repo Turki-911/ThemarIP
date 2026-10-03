@@ -189,10 +189,19 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   List<BmpfCategoryNode> _categories = [];
   List<BmpfCategoryNode> _rawCategories = [];
   String _selectedHierarchyBankCode = 'ALL';
+  String _selectedMonthKey = 'ALL'; // 'ALL' or 'YYYY-MM'
+  int _activeBankCardIndex = 0;
   List<Map<String, dynamic>> _userUploadedBanks = [];
   bool _isLoadingCategories = false;
   final Set<String> _expandedCategoryIds = {};
   int? _selectedCategoryIndex;
+
+  bool get _hasUploadedStatement {
+    if (_userUploadedBanks.isNotEmpty) return true;
+    if (_rawCategories.any((c) => c.transactions.isNotEmpty)) return true;
+    if (_dbTxCount > 0) return true;
+    return false;
+  }
 
   List<LocalBank> get _filteredBanks {
     if (_bankSearchText.trim().isEmpty) return _localBanks;
@@ -211,15 +220,23 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     _selectedPageIndex = widget.initialPageIndex;
     _loadUser();
     _fetchLiveDbCount();
-    if (_selectedPageIndex == 1) {
-      _fetchCategoryHierarchy();
-    }
+    _fetchCategoryHierarchy().then((_) {
+      if (mounted && !_hasUploadedStatement) {
+        setState(() {
+          _selectedPageIndex = 0; // First time user must not bypass Extractor
+        });
+      }
+    });
   }
 
   @override
   void didUpdateWidget(covariant BmpfMainScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialPageIndex != widget.initialPageIndex) {
+      if (!_hasUploadedStatement && widget.initialPageIndex == 1) {
+        _showToast('Please upload your first bank statement in Extractor to unlock Hierarchy analytics.');
+        return;
+      }
       setState(() {
         _selectedPageIndex = widget.initialPageIndex;
       });
@@ -382,48 +399,108 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     }
   }
 
-  void _applyBankFilter() {
-    if (_rawCategories.isEmpty) return;
-
-    if (_selectedHierarchyBankCode == 'ALL') {
-      _categories = _rawCategories.map((node) {
-        return BmpfCategoryNode(
-          id: node.id,
-          name: node.name,
-          icon: node.icon,
-          color: node.color,
-          displayOrder: node.displayOrder,
-          isEnabled: node.isEnabled,
-          children: node.children,
-          totalAmount: node.transactions.fold(0.0, (sum, t) => sum + t.amount),
-          txnCount: node.transactions.length,
-          transactions: List<BmpfTransaction>.from(node.transactions),
-        );
-      }).toList();
-    } else {
-      _categories = _rawCategories.map((node) {
-        final filteredTx = node.transactions.where((t) => t.bankCode.toUpperCase() == _selectedHierarchyBankCode.toUpperCase()).toList();
-        return BmpfCategoryNode(
-          id: node.id,
-          name: node.name,
-          icon: node.icon,
-          color: node.color,
-          displayOrder: node.displayOrder,
-          isEnabled: node.isEnabled,
-          children: node.children,
-          totalAmount: filteredTx.fold(0.0, (sum, t) => sum + t.amount),
-          txnCount: filteredTx.length,
-          transactions: filteredTx,
-        );
-      }).toList();
+  String? _extractMonthKey(String? dateStr) {
+    if (dateStr == null || dateStr.trim().isEmpty) return null;
+    final parsed = DateTime.tryParse(dateStr);
+    if (parsed != null) {
+      final m = parsed.month.toString().padLeft(2, '0');
+      return '${parsed.year}-$m';
     }
+    final parts = dateStr.trim().split(RegExp(r'[/.-]'));
+    if (parts.length >= 3) {
+      try {
+        final y = int.parse(parts[2]);
+        final m = int.parse(parts[1]).toString().padLeft(2, '0');
+        final yearFull = y < 100 ? (2000 + y).toString() : y.toString();
+        return '$yearFull-$m';
+      } catch (_) {}
+    }
+    return null;
   }
 
-  void _onSelectHierarchyBank(String bankCode) {
+  String _formatMonthLabel(String ymKey) {
+    final parts = ymKey.split('-');
+    if (parts.length == 2) {
+      final y = parts[0];
+      final mInt = int.tryParse(parts[1]) ?? 1;
+      const monthNames = [
+        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      final name = mInt >= 1 && mInt <= 12 ? monthNames[mInt] : parts[1];
+      return '$name $y';
+    }
+    return ymKey;
+  }
+
+  List<String> get _availableMonthKeys {
+    final set = <String>{};
+    for (final cat in _rawCategories) {
+      for (final tx in cat.transactions) {
+        final ym = _extractMonthKey(tx.postDate);
+        if (ym != null) set.add(ym);
+      }
+    }
+    final list = set.toList();
+    list.sort((a, b) => b.compareTo(a)); // Newest first
+    return list;
+  }
+
+  void _applyFilters() {
+    if (_rawCategories.isEmpty) return;
+
+    final filterBank = _selectedHierarchyBankCode.toUpperCase();
+    final filterMonth = _selectedMonthKey;
+
+    _categories = _rawCategories.map((node) {
+      final filteredTx = node.transactions.where((t) {
+        // Bank filter
+        if (filterBank != 'ALL' && t.bankCode.toUpperCase() != filterBank) {
+          return false;
+        }
+        // Month filter
+        if (filterMonth != 'ALL') {
+          final txMonth = _extractMonthKey(t.postDate);
+          if (txMonth != null && txMonth != filterMonth) {
+            return false;
+          }
+        }
+        return true;
+      }).toList();
+
+      return BmpfCategoryNode(
+        id: node.id,
+        name: node.name,
+        icon: node.icon,
+        color: node.color,
+        displayOrder: node.displayOrder,
+        isEnabled: node.isEnabled,
+        children: node.children,
+        totalAmount: filteredTx.fold(0.0, (sum, t) => sum + t.amount),
+        txnCount: filteredTx.length,
+        transactions: filteredTx,
+      );
+    }).toList();
+  }
+
+  void _applyBankFilter() => _applyFilters();
+
+  void _onSelectHierarchyBank(String bankCode, [int? cardIndex]) {
     setState(() {
       _selectedHierarchyBankCode = bankCode;
+      if (cardIndex != null) {
+        _activeBankCardIndex = cardIndex;
+      }
       _selectedCategoryIndex = null;
-      _applyBankFilter();
+      _applyFilters();
+    });
+  }
+
+  void _onSelectMonth(String monthKey) {
+    setState(() {
+      _selectedMonthKey = monthKey;
+      _selectedCategoryIndex = null;
+      _applyFilters();
     });
   }
 
@@ -681,150 +758,124 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   // FLOATING BOTTOM NAVIGATION BAR (MATCHING IMAGE 3)
   // ============================================================
   Widget _buildFloatingBottomNavBar() {
-    return Row(
-      children: [
-        // Left Capsule / Pill Container (Extractor & Hierarchy)
-        Expanded(
-          child: Container(
-            height: 60,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF161F30).withValues(alpha: 0.96),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: const Color(0xFF28364F), width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161F30).withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: const Color(0xFF28364F), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Extractor Tab
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedPageIndex = 0;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: _selectedPageIndex == 0
+                      ? const Color(0xFF10B981).withValues(alpha: 0.22)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
+                  border: _selectedPageIndex == 0
+                      ? Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6))
+                      : null,
                 ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Extractor Tab
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedPageIndex = 0;
-                      });
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _selectedPageIndex == 0
-                            ? const Color(0xFF10B981).withValues(alpha: 0.22)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(24),
-                        border: _selectedPageIndex == 0
-                            ? Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6))
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.account_balance_wallet_rounded,
-                            size: 18,
-                            color: _selectedPageIndex == 0 ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Extractor',
-                            style: TextStyle(
-                              color: _selectedPageIndex == 0 ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
-                              fontSize: 12.5,
-                              fontWeight: _selectedPageIndex == 0 ? FontWeight.bold : FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.account_balance_wallet_rounded,
+                      size: 18,
+                      color: _selectedPageIndex == 0 ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Extractor',
+                      style: TextStyle(
+                        color: _selectedPageIndex == 0 ? const Color(0xFF34D399) : const Color(0xFF94A3B8),
+                        fontSize: 12.5,
+                        fontWeight: _selectedPageIndex == 0 ? FontWeight.bold : FontWeight.w600,
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                // Hierarchy Tab
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedPageIndex = 1;
-                      });
-                      if (_categories.isEmpty) {
-                        _fetchCategoryHierarchy();
-                      }
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Hierarchy Tab (Locked if user has not uploaded any bank statement)
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (!_hasUploadedStatement) {
+                  _showToast(
+                    'Please upload your first bank statement in Extractor to unlock Hierarchy analytics.',
+                    isError: false,
+                  );
+                  return;
+                }
+                setState(() {
+                  _selectedPageIndex = 1;
+                });
+                if (_categories.isEmpty) {
+                  _fetchCategoryHierarchy();
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: _selectedPageIndex == 1
+                      ? const Color(0xFF7C3AED).withValues(alpha: 0.25)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
+                  border: _selectedPageIndex == 1
+                      ? Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.6))
+                      : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _hasUploadedStatement ? Icons.explore_rounded : Icons.lock_outline_rounded,
+                      size: 18,
+                      color: _selectedPageIndex == 1
+                          ? const Color(0xFFA78BFA)
+                          : (_hasUploadedStatement ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Hierarchy',
+                      style: TextStyle(
                         color: _selectedPageIndex == 1
-                            ? const Color(0xFF7C3AED).withValues(alpha: 0.25)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(24),
-                        border: _selectedPageIndex == 1
-                            ? Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.6))
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.explore_rounded,
-                            size: 18,
-                            color: _selectedPageIndex == 1 ? const Color(0xFFA78BFA) : const Color(0xFF94A3B8),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Hierarchy',
-                            style: TextStyle(
-                              color: _selectedPageIndex == 1 ? const Color(0xFFA78BFA) : const Color(0xFF94A3B8),
-                              fontSize: 12.5,
-                              fontWeight: _selectedPageIndex == 1 ? FontWeight.bold : FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                            ? const Color(0xFFA78BFA)
+                            : (_hasUploadedStatement ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                        fontSize: 12.5,
+                        fontWeight: _selectedPageIndex == 1 ? FontWeight.bold : FontWeight.w600,
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 14),
-        // Right Floating Action Button (Image 3)
-        GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedPageIndex = 0;
-              _extractorFlow = ExtractorFlowStep.uploadStatement;
-            });
-            _pickPdf();
-          },
-          child: Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: const Color(0xFF161F30).withValues(alpha: 0.96),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF28364F), width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Center(
-              child: Icon(Icons.crop_free_rounded, size: 26, color: Colors.white),
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1194,7 +1245,11 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 20),
+
+        // How to download bank statement guide (Requirement 2)
+        _buildBankStatementGuide(_selectedBank),
+        const SizedBox(height: 28),
 
         // Big Purple Continue Button (Matching Image 2)
         ElevatedButton(
@@ -1212,6 +1267,117 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBankStatementGuide(LocalBank bank) {
+    final List<Map<String, String>> steps;
+    if (bank.code == 'BANK_MUSCAT') {
+      steps = [
+        {'step': '1', 'title': 'Open mBanking App', 'desc': 'Log in to your Bank Muscat mobile banking application.'},
+        {'step': '2', 'title': 'Select Account', 'desc': 'Tap your primary account and choose "Account Statement".'},
+        {'step': '3', 'title': 'Download e-Statement', 'desc': 'Choose the statement date range and select "Download PDF".'},
+        {'step': '4', 'title': 'Save & Upload', 'desc': 'Save the PDF to your device, then click "Continue" below to upload.'},
+      ];
+    } else if (bank.code == 'NBO') {
+      steps = [
+        {'step': '1', 'title': 'Open NBO App', 'desc': 'Log in to the National Bank of Oman mobile application.'},
+        {'step': '2', 'title': 'View Statement', 'desc': 'Navigate to Accounts -> Select Account -> "Download e-Statement".'},
+        {'step': '3', 'title': 'Select Period', 'desc': 'Pick your desired statement period (last 1-3 months).'},
+        {'step': '4', 'title': 'Export & Continue', 'desc': 'Save the generated PDF on your device, then tap "Continue" below.'},
+      ];
+    } else {
+      steps = [
+        {'step': '1', 'title': 'Open Banking App', 'desc': 'Log in to your ${bank.nameEn} mobile app or online banking portal.'},
+        {'step': '2', 'title': 'Navigate to Statements', 'desc': 'Go to Accounts -> Statements / e-Statements.'},
+        {'step': '3', 'title': 'Download PDF', 'desc': 'Select your desired period and tap "Download / Export PDF".'},
+        {'step': '4', 'title': 'Upload to ThemarIP', 'desc': 'Save the PDF file, then tap "Continue" below to extract your data.'},
+      ];
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131D31),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2B3A55)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFA78BFA).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.menu_book_rounded, color: Color(0xFFA78BFA), size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'How to download your ${bank.shortName} statement',
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const Text(
+                      'Follow these simple steps before continuing',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                ),
+                child: const Text('Guide', style: TextStyle(fontSize: 10, color: Color(0xFF34D399), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...steps.map((s) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.6)),
+                  ),
+                  child: Text(
+                    s['step']!,
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(s['title']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                      const SizedBox(height: 1),
+                      Text(s['desc']!, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), height: 1.35)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )),
+        ],
+      ),
     );
   }
 
@@ -1605,187 +1771,220 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   // ============================================================
   // MULTI-BANK HIERARCHY FILTER & SPENDING BEHAVIOR ANALYTICS
   // ============================================================
-  Widget _buildBankHierarchyFilterBar() {
-    final List<Map<String, dynamic>> banksList = [];
+  // ============================================================
+  // MULTI-BANK CARD CAROUSEL & MONTH FILTER SYSTEM (MATCHING IMAGE 3)
+  // ============================================================
+  Widget _buildBankCardCarousel() {
+    final List<Map<String, dynamic>> cardDataList = [];
 
     final totalAllTx = _rawCategories.fold<int>(0, (sum, c) => sum + c.transactions.length);
     final totalAllSpent = _rawCategories.fold<double>(0.0, (sum, c) => sum + c.totalAmount);
 
-    banksList.add({
+    // Card 0: Unified / All Connected Banks
+    cardDataList.add({
       'code': 'ALL',
-      'name': 'All Banks',
+      'name': 'All Connected Banks',
       'shortName': 'ALL',
+      'accountMask': '•••• •••• •••• ALL',
       'txCount': totalAllTx,
       'totalSpent': totalAllSpent,
+      'gradient': const [Color(0xFF3B82F6), Color(0xFF6366F1), Color(0xFF8B5CF6)],
+      'logoAsset': null,
     });
 
+    final bankCodesFound = <String>{};
     if (_userUploadedBanks.isNotEmpty) {
       for (final ub in _userUploadedBanks) {
         final code = ub['bankCode']?.toString() ?? '';
-        if (code.isNotEmpty && !banksList.any((b) => b['code'] == code)) {
+        if (code.isNotEmpty && !bankCodesFound.contains(code)) {
+          bankCodesFound.add(code);
           final bankDef = _findBankByCode(code);
-          banksList.add({
+          final spent = (ub['totalSpent'] as num?)?.toDouble() ?? 0.0;
+          final txs = (ub['txCount'] as num?)?.toInt() ?? 0;
+          cardDataList.add({
             'code': code,
             'name': ub['bankName']?.toString() ?? bankDef?.nameEn ?? code,
             'shortName': bankDef?.shortName ?? code,
-            'txCount': (ub['txCount'] as num?)?.toInt() ?? 0,
-            'totalSpent': (ub['totalSpent'] as num?)?.toDouble() ?? 0.0,
+            'accountMask': '•••• •••• •••• ${bankDef?.shortName ?? "OM"}',
+            'txCount': txs,
+            'totalSpent': spent,
+            'gradient': _getBankCardGradient(code),
             'logoAsset': bankDef?.logoAsset,
           });
         }
       }
     } else {
-      final bankMap = <String, int>{};
+      final bankMap = <String, List<BmpfTransaction>>{};
       for (final cat in _rawCategories) {
         for (final tx in cat.transactions) {
-          bankMap[tx.bankCode] = (bankMap[tx.bankCode] ?? 0) + 1;
+          bankMap.putIfAbsent(tx.bankCode, () => []).add(tx);
         }
       }
       for (final entry in bankMap.entries) {
-        final bankDef = _findBankByCode(entry.key);
-        banksList.add({
-          'code': entry.key,
-          'name': bankDef?.nameEn ?? entry.key,
-          'shortName': bankDef?.shortName ?? entry.key,
-          'txCount': entry.value,
+        final code = entry.key;
+        final bankDef = _findBankByCode(code);
+        final spent = entry.value.fold<double>(0.0, (sum, t) => sum + t.amount);
+        cardDataList.add({
+          'code': code,
+          'name': bankDef?.nameEn ?? code,
+          'shortName': bankDef?.shortName ?? code,
+          'accountMask': '•••• •••• •••• ${bankDef?.shortName ?? "OM"}',
+          'txCount': entry.value.length,
+          'totalSpent': spent,
+          'gradient': _getBankCardGradient(code),
           'logoAsset': bankDef?.logoAsset,
         });
       }
     }
 
+    final totalItems = cardDataList.length + 1; // +1 for the Add Bank Card
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Icon(Icons.tune_rounded, size: 16, color: Color(0xFF34D399)),
-            const SizedBox(width: 8),
-            const Text(
-              'ACCOUNT & BANK FILTER',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF34D399),
-                letterSpacing: 1.0,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              _selectedHierarchyBankCode == 'ALL'
-                  ? 'All Statements Combined'
-                  : 'Filter: ${_findBankByCode(_selectedHierarchyBankCode)?.shortName ?? _selectedHierarchyBankCode}',
-              style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
         SizedBox(
-          height: 44,
+          height: 154,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: banksList.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemCount: totalItems,
+            separatorBuilder: (_, _) => const SizedBox(width: 14),
             itemBuilder: (context, index) {
-              final item = banksList[index];
+              if (index == cardDataList.length) {
+                return _buildAddBankCard();
+              }
+
+              final item = cardDataList[index];
               final code = item['code'] as String;
               final isSelected = _selectedHierarchyBankCode.toUpperCase() == code.toUpperCase();
-              final isAll = code == 'ALL';
-              final bankDef = isAll ? null : _findBankByCode(code);
-              final txCount = item['txCount'] as int? ?? 0;
+              final gradient = item['gradient'] as List<Color>;
+              final spent = item['totalSpent'] as double;
+              final txCount = item['txCount'] as int;
+              final bankDef = code == 'ALL' ? null : _findBankByCode(code);
 
-              return InkWell(
-                onTap: () => _onSelectHierarchyBank(code),
-                borderRadius: BorderRadius.circular(14),
+              return GestureDetector(
+                onTap: () => _onSelectHierarchyBank(code, index),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  duration: const Duration(milliseconds: 220),
+                  width: 255,
+                  height: 150,
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? (isAll ? const Color(0xFF1E1B4B) : const Color(0xFF0F291E))
-                        : const Color(0xFF131B2E),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isSelected
-                          ? (isAll ? const Color(0xFFA78BFA) : const Color(0xFF34D399))
-                          : const Color(0xFF26324A),
-                      width: isSelected ? 1.6 : 1.0,
+                    gradient: LinearGradient(
+                      colors: gradient,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: isAll
-                                  ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
-                                  : const Color(0xFF34D399).withValues(alpha: 0.25),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.15),
+                      width: isSelected ? 2.2 : 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (gradient.first).withValues(alpha: isSelected ? 0.45 : 0.2),
+                        blurRadius: isSelected ? 18 : 10,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (isAll) ...[
-                        Icon(
-                          Icons.dashboard_customize_rounded,
-                          size: 15,
-                          color: isSelected ? const Color(0xFFA78BFA) : const Color(0xFF94A3B8),
-                        ),
-                        const SizedBox(width: 7),
-                      ] else ...[
-                        Container(
-                          width: 20,
-                          height: 20,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: ClipOval(
-                            child: Padding(
-                              padding: const EdgeInsets.all(2),
-                              child: Image.asset(
-                                bankDef?.logoAsset ?? 'assets/banks/bank_muscat.png',
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) => Center(
-                                  child: Text(
-                                    bankDef?.shortName ?? code,
-                                    style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black),
+                      // Top Row: EMV Chip & Overlapping Circles / Bank Logo
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildEmvChip(),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (bankDef != null) ...[
+                                Container(
+                                  width: 26,
+                                  height: 26,
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.asset(
+                                      bankDef.logoAsset,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, _, _) => Center(
+                                        child: Text(
+                                          bankDef.shortName,
+                                          style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
+                                const SizedBox(width: 8),
+                              ],
+                              _buildCardCircles(),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 7),
-                      ],
-                      Text(
-                        isAll ? 'All Banks' : (bankDef?.nameEn ?? item['name'] as String),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
-                        ),
+                        ],
                       ),
-                      if (txCount > 0) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? (isAll ? const Color(0xFF7C3AED) : const Color(0xFF059669))
-                                : const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '$txCount',
+
+                      // Middle: Masked Account Number & Amount
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['accountMask'] as String,
                             style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 2.0,
+                              color: Colors.white.withValues(alpha: 0.85),
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            '${spent.toStringAsFixed(3)} OMR',
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Bottom Row: Bank Name & Tx Count Badge
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item['name'] as String,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                            ),
+                            child: Text(
+                              '$txCount txns',
+                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -1793,369 +1992,298 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
             },
           ),
         ),
+        const SizedBox(height: 10),
+
+        // Pagination Dots Underneath Carousel
+        Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(cardDataList.length, (dotIdx) {
+              final isActive = (_selectedHierarchyBankCode.toUpperCase() == (cardDataList[dotIdx]['code'] as String).toUpperCase()) ||
+                  (_activeBankCardIndex == dotIdx);
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: isActive ? 18 : 6,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildBankBehaviorInsightCard() {
-    final isAll = _selectedHierarchyBankCode == 'ALL';
-    final totalSpentInView = _categories.fold<double>(0.0, (sum, c) => sum + c.totalAmount);
-    final totalTxInView = _categories.fold<int>(0, (sum, c) => sum + c.transactions.length);
-    final totalAllSpent = _rawCategories.fold<double>(0.0, (sum, c) => sum + c.totalAmount);
-
-    BmpfCategoryNode? topCategory;
-    for (final c in _categories) {
-      if (c.totalAmount > 0 && (topCategory == null || c.totalAmount > topCategory.totalAmount)) {
-        topCategory = c;
-      }
-    }
-
-    final topCatPercent = totalSpentInView > 0 && topCategory != null
-        ? ((topCategory.totalAmount / totalSpentInView) * 100).toStringAsFixed(1)
-        : '0.0';
-
-    final avgTxAmount = totalTxInView > 0 ? (totalSpentInView / totalTxInView).toStringAsFixed(3) : '0.000';
-
-    if (isAll) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF161E34), Color(0xFF111827)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+  Widget _buildEmvChip() {
+    return Container(
+      width: 34,
+      height: 25,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFDE68A), Color(0xFFD4AF37), Color(0xFFB45309)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
           ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFF2E3D5B)),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: 26,
+          height: 18,
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFF78350F).withValues(alpha: 0.4), width: 0.8),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Container(width: 0.8, color: const Color(0xFF78350F).withValues(alpha: 0.4)),
+              Container(width: 0.8, color: const Color(0xFF78350F).withValues(alpha: 0.4)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardCircles() {
+    return SizedBox(
+      width: 44,
+      height: 26,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.22),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddBankCard() {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedPageIndex = 0;
+          _extractorFlow = ExtractorFlowStep.selectBank;
+        });
+      },
+      child: Container(
+        width: 76,
+        height: 150,
+        decoration: BoxDecoration(
+          color: const Color(0xFF161F30),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF38BDF8).withValues(alpha: 0.35),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF38BDF8).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.add_rounded,
+                color: Color(0xFF38BDF8),
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Add\nBank',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF38BDF8),
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Color> _getBankCardGradient(String code) {
+    final upper = code.toUpperCase();
+    if (upper.contains('MUSCAT')) {
+      return const [Color(0xFF881337), Color(0xFFBE123C), Color(0xFF4C0519)];
+    } else if (upper.contains('NBO')) {
+      return const [Color(0xFF002B49), Color(0xFF0A3D62), Color(0xFF1E3A8A)];
+    } else if (upper.contains('DHOFAR')) {
+      return const [Color(0xFF065F46), Color(0xFF047857), Color(0xFF064E3B)];
+    } else if (upper.contains('SOHAR')) {
+      return const [Color(0xFF9F1239), Color(0xFFBE123C), Color(0xFFE11D48)];
+    } else if (upper.contains('AHLI')) {
+      return const [Color(0xFF4A0014), Color(0xFF70001E), Color(0xFF881337)];
+    } else if (upper.contains('NIZWA')) {
+      return const [Color(0xFF065F46), Color(0xFF047857), Color(0xFF022C22)];
+    } else if (upper.contains('OAB')) {
+      return const [Color(0xFF004B87), Color(0xFF002D62), Color(0xFF0F172A)];
+    } else {
+      return const [Color(0xFF1E293B), Color(0xFF334155), Color(0xFF0F172A)];
+    }
+  }
+
+  Widget _buildMonthFilterBar() {
+    final months = _availableMonthKeys;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.calendar_month_rounded, size: 15, color: Color(0xFF34D399)),
+            const SizedBox(width: 7),
+            const Text(
+              'FILTER BY MONTH',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF34D399),
+                letterSpacing: 0.8,
+              ),
+            ),
+            const Spacer(),
+            if (_selectedMonthKey != 'ALL')
+              GestureDetector(
+                onTap: () => _onSelectMonth('ALL'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+                    color: const Color(0xFF1E293B),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.4)),
-                  ),
-                  child: const Icon(Icons.insights_rounded, color: Color(0xFFA78BFA), size: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _userUploadedBanks.length > 1
-                            ? 'Consolidated Multi-Bank Behavior'
-                            : 'Spending Behavior Overview',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      Text(
-                        _userUploadedBanks.length > 1
-                            ? 'Combined activity across ${_userUploadedBanks.length} local bank statements'
-                            : (_userUploadedBanks.isNotEmpty
-                                ? 'Activity from ${_userUploadedBanks.first['bankName'] ?? 'uploaded statement'}'
-                                : 'Activity from uploaded statement'),
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF34D399).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.5)),
+                    border: Border.all(color: const Color(0xFF334155)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF34D399)),
-                      SizedBox(width: 4),
-                      Text('Unified PFM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF34D399))),
+                      Icon(Icons.close, size: 11, color: Color(0xFF94A3B8)),
+                      SizedBox(width: 3),
+                      Text('Show All', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricTile(
-                    label: 'Total Net Outflow',
-                    value: '${totalSpentInView.toStringAsFixed(3)} OMR',
-                    subtitle: '$totalTxInView total transactions',
-                    icon: Icons.account_balance_wallet_outlined,
-                    accentColor: const Color(0xFF38BDF8),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildMetricTile(
-                    label: 'Primary Expense Group',
-                    value: topCategory != null ? topCategory.name : 'General',
-                    subtitle: topCategory != null ? '$topCatPercent% of total' : '--',
-                    icon: Icons.pie_chart_outline_rounded,
-                    accentColor: const Color(0xFFA78BFA),
-                  ),
-                ),
-              ],
-            ),
-            if (_userUploadedBanks.length >= 2) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF1E293B)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Bank Activity Share:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
-                    const SizedBox(height: 8),
-                    ..._userUploadedBanks.map((ub) {
-                      final bCode = ub['bankCode']?.toString() ?? '';
-                      final bankDef = _findBankByCode(bCode);
-                      final spent = (ub['totalSpent'] as num?)?.toDouble() ?? 0.0;
-                      final share = totalAllSpent > 0 ? (spent / totalAllSpent) : 0.0;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 16,
-                              height: 16,
-                              decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
-                              child: ClipOval(
-                                child: Image.asset(
-                                  bankDef?.logoAsset ?? 'assets/banks/bank_muscat.png',
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, _, _) => const Icon(Icons.account_balance, size: 10, color: Colors.black),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            SizedBox(
-                              width: 110,
-                              child: Text(
-                                bankDef?.nameEn ?? bCode,
-                                style: const TextStyle(fontSize: 11, color: Colors.white),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(
-                                  value: share.clamp(0.01, 1.0),
-                                  minHeight: 6,
-                                  backgroundColor: const Color(0xFF1E293B),
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    bCode.contains('MUSCAT') ? const Color(0xFFEF4444) : const Color(0xFF38BDF8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${(share * 100).toStringAsFixed(0)}% (${spent.toStringAsFixed(1)} OMR)',
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8)),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
               ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 38,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              _buildMonthPill(key: 'ALL', label: 'All Months'),
+              ...months.map((mKey) => _buildMonthPill(
+                    key: mKey,
+                    label: _formatMonthLabel(mKey),
+                  )),
             ],
-          ],
-        ),
-      );
-    } else {
-      final bank = _findBankByCode(_selectedHierarchyBankCode);
-      final bankShare = totalAllSpent > 0 ? ((totalSpentInView / totalAllSpent) * 100).toStringAsFixed(1) : '100.0';
-
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0F291E), Color(0xFF0B1B15)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF34D399).withValues(alpha: 0.3),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: Padding(
-                      padding: const EdgeInsets.all(3),
-                      child: Image.asset(
-                        bank?.logoAsset ?? 'assets/banks/bank_muscat.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => Center(
-                          child: Text(bank?.shortName ?? 'BM', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Single Bank Behavior: ${bank?.nameEn ?? _selectedHierarchyBankCode}',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      const Text(
-                        'Regulated under CBO • Dedicated spending profile',
-                        style: TextStyle(fontSize: 11, color: Color(0xFF34D399)),
-                      ),
-                    ],
-                  ),
-                ),
-                InkWell(
-                  onTap: () => _onSelectHierarchyBank('ALL'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.close, size: 12, color: Color(0xFF94A3B8)),
-                        SizedBox(width: 4),
-                        Text('Reset All', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricTile(
-                    label: '${bank?.shortName ?? "Bank"} Outflow',
-                    value: '${totalSpentInView.toStringAsFixed(3)} OMR',
-                    subtitle: '$bankShare% of total wallet',
-                    icon: Icons.account_balance,
-                    accentColor: const Color(0xFF34D399),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildMetricTile(
-                    label: 'Top Expense in ${bank?.shortName ?? "Bank"}',
-                    value: topCategory != null ? topCategory.name : 'General',
-                    subtitle: topCategory != null ? '$topCatPercent% ($totalTxInView txns)' : '--',
-                    icon: Icons.category_rounded,
-                    accentColor: const Color(0xFFFBBF24),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.2)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.lightbulb_outline_rounded, size: 16, color: Color(0xFF34D399)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Avg ticket in ${bank?.shortName ?? "this bank"}: $avgTxAmount OMR. Represents $totalTxInView active transactions categorized.',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFFCBD5E1)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+      ],
+    );
   }
 
-  Widget _buildMetricTile({
-    required String label,
-    required String value,
-    required String subtitle,
-    required IconData icon,
-    required Color accentColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1E293B)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  Widget _buildMonthPill({required String key, required String label}) {
+    final isSelected = _selectedMonthKey == key;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: () => _onSelectMonth(key),
+        borderRadius: BorderRadius.circular(19),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF10B981).withValues(alpha: 0.22)
+                : const Color(0xFF131B2E),
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF34D399) : const Color(0xFF26324A),
+              width: isSelected ? 1.5 : 1.0,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: accentColor),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
-                  overflow: TextOverflow.ellipsis,
+              if (isSelected) ...[
+                const Icon(Icons.check_circle_rounded, size: 13, color: Color(0xFF34D399)),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(fontSize: 10, color: accentColor.withValues(alpha: 0.9), fontWeight: FontWeight.w500),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2195,13 +2323,13 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Multi-Bank Account & Behavior Filter Bar
-        _buildBankHierarchyFilterBar(),
+        // Multi-Bank Card Carousel with Add (+) Button (Matching Image 3)
+        _buildBankCardCarousel(),
         const SizedBox(height: 16),
 
-        // Multi-Bank Spending Behavior Intelligence Card
-        _buildBankBehaviorInsightCard(),
-        const SizedBox(height: 16),
+        // User-Friendly Dynamic Month Filter Bar
+        _buildMonthFilterBar(),
+        const SizedBox(height: 18),
 
         if (_categories.isNotEmpty) ...[
           _buildCategoryPieChartCard(),

@@ -143,6 +143,13 @@ public class StatementExtractionService : IStatementExtractionService
                 }
             }
 
+            var bCode = !string.IsNullOrWhiteSpace(request.BankCode)
+                ? request.BankCode
+                : (!string.IsNullOrWhiteSpace(request.Header?.BankCode) ? request.Header.BankCode : "BANK_MUSCAT");
+            var bName = !string.IsNullOrWhiteSpace(request.BankName)
+                ? request.BankName
+                : (!string.IsNullOrWhiteSpace(request.Header?.BankName) ? request.Header.BankName : "Bank Muscat");
+
             var pfmTx = new PfmTransaction
             {
                 Id = Guid.NewGuid(),
@@ -153,7 +160,9 @@ public class StatementExtractionService : IStatementExtractionService
                 Amount = txAmount,
                 TransactionType = isCredit ? ThemarIP.Domain.Enums.Pfm.TransactionType.Credit : ThemarIP.Domain.Enums.Pfm.TransactionType.Debit,
                 BalanceAfter = tx.Balance,
-                Currency = string.IsNullOrWhiteSpace(request.Header.Currency) ? "OMR" : request.Header.Currency,
+                Currency = string.IsNullOrWhiteSpace(request.Header?.Currency) ? "OMR" : request.Header.Currency,
+                BankCode = bCode,
+                BankName = bName,
                 Status = matchedMerchantId.HasValue ? ThemarIP.Domain.Enums.Pfm.TransactionStatus.Categorized : ThemarIP.Domain.Enums.Pfm.TransactionStatus.Uncategorized,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow

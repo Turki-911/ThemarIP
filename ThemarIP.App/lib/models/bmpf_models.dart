@@ -40,6 +40,8 @@ class BmpfTransaction {
   final int confidence;
   final String? validationMessage;
   final String? extractionStatus;
+  final String bankCode;
+  final String bankName;
 
   BmpfTransaction({
     required this.narration,
@@ -57,6 +59,8 @@ class BmpfTransaction {
     this.confidence = 100,
     this.validationMessage,
     this.extractionStatus,
+    this.bankCode = 'BANK_MUSCAT',
+    this.bankName = 'Bank Muscat',
   });
 
   factory BmpfTransaction.fromJson(Map<String, dynamic> json) {
@@ -82,6 +86,8 @@ class BmpfTransaction {
       confidence: (json['confidence'] as num?)?.toInt() ?? 100,
       validationMessage: json['validationMessage']?.toString(),
       extractionStatus: json['extractionStatus']?.toString(),
+      bankCode: json['bankCode']?.toString() ?? 'BANK_MUSCAT',
+      bankName: json['bankName']?.toString() ?? 'Bank Muscat',
     );
   }
 
@@ -104,6 +110,8 @@ class BmpfTransaction {
       'confidence': confidence,
       'validationMessage': validationMessage,
       'extractionStatus': extractionStatus,
+      'bankCode': bankCode,
+      'bankName': bankName,
     };
   }
 }

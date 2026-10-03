@@ -21,6 +21,8 @@ public class PfmTransactionConfiguration : IEntityTypeConfiguration<PfmTransacti
         builder.Property(e => e.MccCode).HasMaxLength(8);
         builder.Property(e => e.IsRecurring).HasDefaultValue(false);
         builder.Property(e => e.IsEssential).HasDefaultValue(false);
+        builder.Property(e => e.BankCode).HasMaxLength(32).HasDefaultValue("BANK_MUSCAT");
+        builder.Property(e => e.BankName).HasMaxLength(128).HasDefaultValue("Bank Muscat");
 
         builder.HasOne(e => e.User)
             .WithMany()

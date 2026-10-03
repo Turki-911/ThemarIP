@@ -235,6 +235,7 @@ public class StatementsController : ControllerBase
     [HttpGet("category-stats")]
     public async Task<IActionResult> GetCategoryStats(
         [FromQuery] System.Guid? userId,
+        [FromQuery] string? bankCode,
         [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
     {
         var activeMerchants = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
@@ -254,6 +255,10 @@ public class StatementsController : ControllerBase
         if (userId.HasValue)
         {
             txQuery = txQuery.Where(t => t.UserId == userId.Value);
+        }
+        if (!string.IsNullOrWhiteSpace(bankCode) && !string.Equals(bankCode, "ALL", System.StringComparison.OrdinalIgnoreCase))
+        {
+            txQuery = txQuery.Where(t => t.BankCode == bankCode);
         }
         var transactions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(txQuery);
 
@@ -331,7 +336,9 @@ public class StatementsController : ControllerBase
                         transactionType = tx.TransactionType.ToString(),
                         balanceAfter = tx.BalanceAfter,
                         matchedKeyword = merchant.Name,
-                        subcategory = subName
+                        subcategory = subName,
+                        bankCode = tx.BankCode,
+                        bankName = tx.BankName
                     };
 
                     if (catTxns.ContainsKey(targetCatName)) catTxns[targetCatName].Add(txItem);
@@ -368,7 +375,9 @@ public class StatementsController : ControllerBase
                             transactionType = tx.TransactionType.ToString(),
                             balanceAfter = tx.BalanceAfter,
                             matchedKeyword = rule.Keyword,
-                            subcategory = rule.Category
+                            subcategory = rule.Category,
+                            bankCode = tx.BankCode,
+                            bankName = tx.BankName
                         };
 
                         if (catTxns.ContainsKey(catName)) catTxns[catName].Add(txItem);
@@ -394,7 +403,9 @@ public class StatementsController : ControllerBase
                     transactionType = tx.TransactionType.ToString(),
                     balanceAfter = tx.BalanceAfter,
                     matchedKeyword = "",
-                    subcategory = "Uncategorized"
+                    subcategory = "Uncategorized",
+                    bankCode = tx.BankCode,
+                    bankName = tx.BankName
                 });
             }
         }
@@ -411,6 +422,37 @@ public class StatementsController : ControllerBase
             .ToList();
 
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Returns the distinct local banks associated with user's uploaded statements/transactions,
+    /// along with transaction count and total spending per bank.
+    /// </summary>
+    [HttpGet("user-banks")]
+    public async Task<IActionResult> GetUserBanks(
+        [FromQuery] System.Guid? userId,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var txQuery = context.PfmTransactions.AsQueryable();
+        if (userId.HasValue)
+        {
+            txQuery = txQuery.Where(t => t.UserId == userId.Value);
+        }
+
+        var txList = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(txQuery);
+        var banks = txList
+            .GroupBy(t => new { Code = t.BankCode ?? "BANK_MUSCAT", Name = t.BankName ?? "Bank Muscat" })
+            .Select(g => new
+            {
+                bankCode = g.Key.Code,
+                bankName = g.Key.Name,
+                txCount = g.Count(),
+                totalSpent = g.Where(t => t.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Debit).Sum(t => t.Amount)
+            })
+            .OrderByDescending(b => b.txCount)
+            .ToList();
+
+        return Ok(banks);
     }
 
     [HttpPost("categories")]

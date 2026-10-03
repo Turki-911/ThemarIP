@@ -49,6 +49,12 @@ public class PfmTransaction
     /// <summary>Raw MCC code from the PSP, if available.</summary>
     public string? MccCode { get; set; }
 
+    /// <summary>Originating financial institution identifier (e.g. BANK_MUSCAT, NBO, BANK_DHOFAR).</summary>
+    public string BankCode { get; set; } = "BANK_MUSCAT";
+
+    /// <summary>Display name of originating bank (e.g. Bank Muscat, National Bank of Oman).</summary>
+    public string BankName { get; set; } = "Bank Muscat";
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 

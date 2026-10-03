@@ -120,6 +120,7 @@ class ApiConfig {
   static const String merchants = '/statements/merchants';
   static const String categoryRules = '/statements/category-rules';
   static const String categoryStats = '/statements/category-stats';
+  static const String userBanks = '/statements/user-banks';
 
   static const String transactions = '/statements/transactions';
   static const String transactionsSummary = '/transactions/summary';

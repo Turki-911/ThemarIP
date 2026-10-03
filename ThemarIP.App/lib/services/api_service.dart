@@ -258,11 +258,28 @@ class ApiService {
     return [];
   }
 
-  Future<List<dynamic>> getCategoryStats({String? userId}) async {
+  Future<List<dynamic>> getCategoryStats({String? userId, String? bankCode}) async {
+    try {
+      final params = <String>[];
+      if (userId != null && userId.isNotEmpty) params.add('userId=$userId');
+      if (bankCode != null && bankCode.isNotEmpty && bankCode != 'ALL') params.add('bankCode=$bankCode');
+      final query = params.isNotEmpty ? '?${params.join('&')}' : '';
+      final url = '${ApiConfig.categoryStats}$query';
+      final response = await _dio.get(url);
+      if (response.data is List) {
+        return response.data as List;
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getUserBanks({String? userId}) async {
     try {
       final url = userId != null && userId.isNotEmpty
-          ? '${ApiConfig.categoryStats}?userId=$userId'
-          : ApiConfig.categoryStats;
+          ? '${ApiConfig.userBanks}?userId=$userId'
+          : ApiConfig.userBanks;
       final response = await _dio.get(url);
       if (response.data is List) {
         return response.data as List;

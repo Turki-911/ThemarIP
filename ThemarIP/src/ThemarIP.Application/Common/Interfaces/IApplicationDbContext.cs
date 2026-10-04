@@ -22,6 +22,15 @@ public interface IApplicationDbContext
     DbSet<ThemarIP.Domain.Entities.Pfm.PfmSubcategory> PfmSubcategories { get; }
     DbSet<ThemarIP.Domain.Entities.Pfm.PfmMerchant> PfmMerchants { get; }
     DbSet<ThemarIP.Domain.Entities.Pfm.PfmMerchantAlias> PfmMerchantAliases { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmCategorizationRule> PfmCategorizationRules { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmRuleCondition> PfmRuleConditions { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmConfidenceBand> PfmConfidenceBands { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmConfidenceWeight> PfmConfidenceWeights { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmIntelligenceRule> PfmIntelligenceRules { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmIntelligenceRuleParam> PfmIntelligenceRuleParams { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmIntelligenceAlert> PfmIntelligenceAlerts { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmUserCorrection> PfmUserCorrections { get; }
+    DbSet<ThemarIP.Domain.Entities.Pfm.PfmAuditLog> PfmAuditLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

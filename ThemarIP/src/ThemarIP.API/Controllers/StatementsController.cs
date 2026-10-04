@@ -337,8 +337,436 @@ public class StatementsController : ControllerBase
     [HttpGet("category-rules")]
     public async Task<IActionResult> GetCategoryRules([FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
     {
-        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.CategoryRules);
-        return Ok(rules);
+        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                context.PfmCategorizationRules,
+                r => r.Conditions
+            )
+        );
+
+        var allCategories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.PfmCategories);
+        var catDict = allCategories.ToDictionary(c => c.Id, c => c.Name);
+
+        var result = rules.OrderByDescending(r => r.Priority).Select(r =>
+        {
+            catDict.TryGetValue(r.CategoryId ?? Guid.Empty, out var catName);
+            catDict.TryGetValue(r.SubcategoryId ?? Guid.Empty, out var subName);
+
+            return new
+            {
+                id = r.Id.ToString(),
+                name = r.Name,
+                categoryId = r.CategoryId?.ToString() ?? "",
+                categoryName = catName ?? "",
+                subcategoryId = r.SubcategoryId?.ToString() ?? "",
+                subcategoryName = subName ?? "",
+                confidence = r.Confidence,
+                priority = r.Priority,
+                status = r.Status.ToString().ToLowerInvariant(),
+                matchCount = r.MatchCount,
+                isLearnedFromCorrection = r.IsLearnedFromCorrection,
+                conditions = r.Conditions.OrderBy(c => c.OrderIndex).Select(c => new
+                {
+                    id = c.Id.ToString(),
+                    field = MapConditionFieldToString(c.Field),
+                    @operator = MapConditionOperatorToString(c.Operator),
+                    value = c.Value,
+                    logic = c.LogicOperator == ThemarIP.Domain.Enums.Pfm.RuleConditionLogic.Or ? "OR" : "AND"
+                }).ToList()
+            };
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpPost("category-rules")]
+    public async Task<IActionResult> CreateCategoryRule(
+        [FromBody] SaveCategorizationRuleDto dto,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        if (dto == null || string.IsNullOrWhiteSpace(dto.Name))
+            return BadRequest(new { message = "Rule name is required." });
+
+        var rule = new ThemarIP.Domain.Entities.Pfm.PfmCategorizationRule
+        {
+            Id = Guid.NewGuid(),
+            Name = dto.Name.Trim(),
+            CategoryId = dto.CategoryId,
+            SubcategoryId = dto.SubcategoryId,
+            Confidence = Math.Clamp(dto.Confidence, 0, 100),
+            Priority = Math.Clamp(dto.Priority, 1, 100),
+            Status = string.Equals(dto.Status, "inactive", StringComparison.OrdinalIgnoreCase) 
+                ? ThemarIP.Domain.Enums.Pfm.RuleStatus.Inactive 
+                : ThemarIP.Domain.Enums.Pfm.RuleStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        if (dto.Conditions != null && dto.Conditions.Count > 0)
+        {
+            for (int i = 0; i < dto.Conditions.Count; i++)
+            {
+                var c = dto.Conditions[i];
+                rule.Conditions.Add(new ThemarIP.Domain.Entities.Pfm.PfmRuleCondition
+                {
+                    Id = Guid.NewGuid(),
+                    RuleId = rule.Id,
+                    Field = ParseConditionField(c.Field),
+                    Operator = ParseConditionOperator(c.Operator),
+                    Value = c.Value ?? "",
+                    LogicOperator = string.Equals(c.Logic, "OR", StringComparison.OrdinalIgnoreCase)
+                        ? ThemarIP.Domain.Enums.Pfm.RuleConditionLogic.Or
+                        : ThemarIP.Domain.Enums.Pfm.RuleConditionLogic.And,
+                    OrderIndex = i
+                });
+            }
+        }
+
+        context.PfmCategorizationRules.Add(rule);
+        await context.SaveChangesAsync(default);
+
+        return Ok(new
+        {
+            success = true,
+            message = "Rule created and persisted to themarip.db.",
+            id = rule.Id.ToString()
+        });
+    }
+
+    [HttpPut("category-rules/{id}")]
+    public async Task<IActionResult> UpdateCategoryRule(
+        [FromRoute] Guid id,
+        [FromBody] SaveCategorizationRuleDto dto,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        if (dto == null || string.IsNullOrWhiteSpace(dto.Name))
+            return BadRequest(new { message = "Rule name is required." });
+
+        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                context.PfmCategorizationRules,
+                r => r.Conditions
+            )
+        );
+        var rule = rules.FirstOrDefault(r => r.Id == id || string.Equals(r.Id.ToString(), id.ToString(), StringComparison.OrdinalIgnoreCase));
+        if (rule == null) return NotFound(new { message = "Rule not found." });
+
+        rule.Name = dto.Name.Trim();
+        rule.CategoryId = dto.CategoryId;
+        rule.SubcategoryId = dto.SubcategoryId;
+        rule.Confidence = Math.Clamp(dto.Confidence, 0, 100);
+        rule.Priority = Math.Clamp(dto.Priority, 1, 100);
+        rule.Status = string.Equals(dto.Status, "inactive", StringComparison.OrdinalIgnoreCase)
+            ? ThemarIP.Domain.Enums.Pfm.RuleStatus.Inactive
+            : ThemarIP.Domain.Enums.Pfm.RuleStatus.Active;
+        rule.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Clear existing conditions and replace
+        if (rule.Conditions.Count > 0)
+        {
+            context.PfmRuleConditions.RemoveRange(rule.Conditions);
+        }
+
+        if (dto.Conditions != null && dto.Conditions.Count > 0)
+        {
+            for (int i = 0; i < dto.Conditions.Count; i++)
+            {
+                var c = dto.Conditions[i];
+                context.PfmRuleConditions.Add(new ThemarIP.Domain.Entities.Pfm.PfmRuleCondition
+                {
+                    Id = Guid.NewGuid(),
+                    RuleId = rule.Id,
+                    Field = ParseConditionField(c.Field),
+                    Operator = ParseConditionOperator(c.Operator),
+                    Value = c.Value ?? "",
+                    LogicOperator = string.Equals(c.Logic, "OR", StringComparison.OrdinalIgnoreCase)
+                        ? ThemarIP.Domain.Enums.Pfm.RuleConditionLogic.Or
+                        : ThemarIP.Domain.Enums.Pfm.RuleConditionLogic.And,
+                    OrderIndex = i
+                });
+            }
+        }
+
+        await context.SaveChangesAsync(default);
+        return Ok(new { success = true, message = "Rule updated and persisted to themarip.db." });
+    }
+
+    [HttpPatch("category-rules/{id}/toggle")]
+    public async Task<IActionResult> ToggleCategoryRule(
+        [FromRoute] Guid id,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.PfmCategorizationRules);
+        var rule = rules.FirstOrDefault(r => r.Id == id || string.Equals(r.Id.ToString(), id.ToString(), StringComparison.OrdinalIgnoreCase));
+        if (rule == null) return NotFound(new { message = "Rule not found." });
+
+        rule.Status = rule.Status == ThemarIP.Domain.Enums.Pfm.RuleStatus.Active
+            ? ThemarIP.Domain.Enums.Pfm.RuleStatus.Inactive
+            : ThemarIP.Domain.Enums.Pfm.RuleStatus.Active;
+        rule.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await context.SaveChangesAsync(default);
+        return Ok(new
+        {
+            success = true,
+            message = "Rule status toggled.",
+            status = rule.Status.ToString().ToLowerInvariant()
+        });
+    }
+
+    [HttpDelete("category-rules/{id}")]
+    public async Task<IActionResult> DeleteCategoryRule(
+        [FromRoute] Guid id,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                context.PfmCategorizationRules,
+                r => r.Conditions
+            )
+        );
+        var rule = rules.FirstOrDefault(r => r.Id == id || string.Equals(r.Id.ToString(), id.ToString(), StringComparison.OrdinalIgnoreCase));
+        if (rule == null) return NotFound(new { message = "Rule not found." });
+
+        if (rule.Conditions.Count > 0)
+        {
+            context.PfmRuleConditions.RemoveRange(rule.Conditions);
+        }
+        context.PfmCategorizationRules.Remove(rule);
+        await context.SaveChangesAsync(default);
+
+        return Ok(new { success = true, message = "Rule deleted from themarip.db successfully." });
+    }
+
+    [HttpGet("confidence-settings")]
+    public async Task<IActionResult> GetConfidenceSettings([FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var bands = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.PfmConfidenceBands);
+        var weights = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.PfmConfidenceWeights);
+
+        var highBand = bands.FirstOrDefault(b => b.BandName == ThemarIP.Domain.Enums.Pfm.ConfidenceBandName.High);
+        var medBand = bands.FirstOrDefault(b => b.BandName == ThemarIP.Domain.Enums.Pfm.ConfidenceBandName.Medium);
+        var lowBand = bands.FirstOrDefault(b => b.BandName == ThemarIP.Domain.Enums.Pfm.ConfidenceBandName.Low);
+
+        var merchantWeight = weights.FirstOrDefault(w => w.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.MerchantMatch)?.WeightPercent ?? 40;
+        var mccWeight = weights.FirstOrDefault(w => w.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.MccMatch)?.WeightPercent ?? 30;
+        var narrationWeight = weights.FirstOrDefault(w => w.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.NarrationMatch)?.WeightPercent ?? 15;
+        var historicalWeight = weights.FirstOrDefault(w => w.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.HistoricalMatch)?.WeightPercent ?? 10;
+        var amountWeight = weights.FirstOrDefault(w => w.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.AmountPattern)?.WeightPercent ?? 5;
+
+        return Ok(new
+        {
+            weights = new
+            {
+                merchantMatch = merchantWeight,
+                mccMatch = mccWeight,
+                narrationMatch = narrationWeight,
+                historicalMatch = historicalWeight,
+                amountPattern = amountWeight
+            },
+            bands = new
+            {
+                high = new
+                {
+                    min = highBand?.MinThreshold ?? 90,
+                    max = highBand?.MaxThreshold ?? 100,
+                    action = highBand?.Action.ToString().ToLowerInvariant() switch
+                    {
+                        "autocategorize" => "auto_categorize",
+                        "categorizandmonitor" => "categorize_and_monitor",
+                        _ => "auto_categorize"
+                    }
+                },
+                medium = new
+                {
+                    min = medBand?.MinThreshold ?? 70,
+                    max = medBand?.MaxThreshold ?? 89,
+                    action = medBand?.Action.ToString().ToLowerInvariant() switch
+                    {
+                        "autocategorize" => "auto_categorize",
+                        "categorizandmonitor" => "categorize_and_monitor",
+                        _ => "categorize_and_monitor"
+                    }
+                },
+                low = new
+                {
+                    min = lowBand?.MinThreshold ?? 0,
+                    max = lowBand?.MaxThreshold ?? 69,
+                    action = "send_to_review"
+                }
+            }
+        });
+    }
+
+    [HttpPost("confidence-settings")]
+    public async Task<IActionResult> SaveConfidenceSettings(
+        [FromBody] System.Text.Json.JsonElement body,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var bands = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.PfmConfidenceBands);
+        var weights = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.PfmConfidenceWeights);
+
+        if (body.TryGetProperty("weights", out var wElem))
+        {
+            if (wElem.TryGetProperty("merchantMatch", out var mm))
+            {
+                var w = weights.FirstOrDefault(x => x.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.MerchantMatch);
+                if (w != null) w.WeightPercent = mm.GetInt32();
+            }
+            if (wElem.TryGetProperty("mccMatch", out var mcc))
+            {
+                var w = weights.FirstOrDefault(x => x.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.MccMatch);
+                if (w != null) w.WeightPercent = mcc.GetInt32();
+            }
+            if (wElem.TryGetProperty("narrationMatch", out var nm))
+            {
+                var w = weights.FirstOrDefault(x => x.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.NarrationMatch);
+                if (w != null) w.WeightPercent = nm.GetInt32();
+            }
+            if (wElem.TryGetProperty("historicalMatch", out var hm))
+            {
+                var w = weights.FirstOrDefault(x => x.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.HistoricalMatch);
+                if (w != null) w.WeightPercent = hm.GetInt32();
+            }
+            if (wElem.TryGetProperty("amountPattern", out var ap))
+            {
+                var w = weights.FirstOrDefault(x => x.Signal == ThemarIP.Domain.Enums.Pfm.ConfidenceSignal.AmountPattern);
+                if (w != null) w.WeightPercent = ap.GetInt32();
+            }
+        }
+
+        if (body.TryGetProperty("bands", out var bElem))
+        {
+            if (bElem.TryGetProperty("high", out var hb))
+            {
+                var b = bands.FirstOrDefault(x => x.BandName == ThemarIP.Domain.Enums.Pfm.ConfidenceBandName.High);
+                if (b != null)
+                {
+                    if (hb.TryGetProperty("min", out var min)) b.MinThreshold = min.GetInt32();
+                    if (hb.TryGetProperty("max", out var max)) b.MaxThreshold = max.GetInt32();
+                }
+            }
+            if (bElem.TryGetProperty("medium", out var mb))
+            {
+                var b = bands.FirstOrDefault(x => x.BandName == ThemarIP.Domain.Enums.Pfm.ConfidenceBandName.Medium);
+                if (b != null)
+                {
+                    if (mb.TryGetProperty("min", out var min)) b.MinThreshold = min.GetInt32();
+                    if (mb.TryGetProperty("max", out var max)) b.MaxThreshold = max.GetInt32();
+                }
+            }
+            if (bElem.TryGetProperty("low", out var lb))
+            {
+                var b = bands.FirstOrDefault(x => x.BandName == ThemarIP.Domain.Enums.Pfm.ConfidenceBandName.Low);
+                if (b != null)
+                {
+                    if (lb.TryGetProperty("min", out var min)) b.MinThreshold = min.GetInt32();
+                    if (lb.TryGetProperty("max", out var max)) b.MaxThreshold = max.GetInt32();
+                }
+            }
+        }
+
+        await context.SaveChangesAsync(default);
+        return Ok(new { success = true, message = "Confidence settings saved to themarip.db successfully." });
+    }
+
+    [HttpGet("intelligence-rules")]
+    public async Task<IActionResult> GetIntelligenceRules([FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                context.PfmIntelligenceRules,
+                r => r.Params
+            )
+        );
+
+        var result = rules.Select(r => new
+        {
+            id = r.Id.ToString(),
+            type = r.RuleType.ToString(),
+            name = r.Name,
+            description = r.InsightTemplate,
+            status = r.Status.ToString().ToLowerInvariant(),
+            alertSeverity = "Medium",
+            cooldownHours = 24,
+            @params = r.Params.Select(p => new
+            {
+                id = p.Id.ToString(),
+                paramKey = p.ParamKey,
+                displayName = p.ParamKey,
+                paramType = p.ParamType.ToString(),
+                paramValue = p.ParamValue
+            }).ToList()
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpPatch("intelligence-rules/{id}/toggle")]
+    public async Task<IActionResult> ToggleIntelligenceRule(
+        [FromRoute] Guid id,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.PfmIntelligenceRules);
+        var rule = rules.FirstOrDefault(r => r.Id == id || string.Equals(r.Id.ToString(), id.ToString(), StringComparison.OrdinalIgnoreCase));
+        if (rule == null) return NotFound(new { message = "Rule not found." });
+
+        rule.Status = rule.Status == ThemarIP.Domain.Enums.Pfm.IntelligenceRuleStatus.Active
+            ? ThemarIP.Domain.Enums.Pfm.IntelligenceRuleStatus.Inactive
+            : ThemarIP.Domain.Enums.Pfm.IntelligenceRuleStatus.Active;
+        rule.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await context.SaveChangesAsync(default);
+        return Ok(new { success = true, status = rule.Status.ToString().ToLowerInvariant() });
+    }
+
+    [HttpPut("intelligence-rules/{id}")]
+    public async Task<IActionResult> UpdateIntelligenceRule(
+        [FromRoute] Guid id,
+        [FromBody] System.Text.Json.JsonElement body,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                context.PfmIntelligenceRules,
+                r => r.Params
+            )
+        );
+        var rule = rules.FirstOrDefault(r => r.Id == id || string.Equals(r.Id.ToString(), id.ToString(), StringComparison.OrdinalIgnoreCase));
+        if (rule == null) return NotFound(new { message = "Rule not found." });
+
+        if (body.TryGetProperty("name", out var nameElem))
+        {
+            rule.Name = nameElem.GetString() ?? rule.Name;
+        }
+        if (body.TryGetProperty("insightTemplate", out var templateElem))
+        {
+            rule.InsightTemplate = templateElem.GetString() ?? rule.InsightTemplate;
+        }
+        if (body.TryGetProperty("status", out var statusElem))
+        {
+            var statusStr = statusElem.GetString();
+            if (string.Equals(statusStr, "active", StringComparison.OrdinalIgnoreCase))
+                rule.Status = ThemarIP.Domain.Enums.Pfm.IntelligenceRuleStatus.Active;
+            else if (string.Equals(statusStr, "inactive", StringComparison.OrdinalIgnoreCase))
+                rule.Status = ThemarIP.Domain.Enums.Pfm.IntelligenceRuleStatus.Inactive;
+        }
+        if (body.TryGetProperty("params", out var paramsElem) && paramsElem.ValueKind == System.Text.Json.JsonValueKind.Object)
+        {
+            foreach (var prop in paramsElem.EnumerateObject())
+            {
+                var p = rule.Params.FirstOrDefault(x => string.Equals(x.ParamKey, prop.Name, StringComparison.OrdinalIgnoreCase));
+                if (p != null)
+                {
+                    p.ParamValue = prop.Value.ToString();
+                    p.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
+        }
+
+        rule.UpdatedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(default);
+        return Ok(new { success = true, message = "Intelligence rule updated in themarip.db." });
     }
 
     [HttpGet("categories-hierarchy")]
@@ -656,6 +1084,40 @@ public class StatementsController : ControllerBase
         return Ok(new { message = "Category deleted successfully." });
     }
 
+    [HttpPut("categories/{id}")]
+    public async Task<IActionResult> UpdateCategory(
+        System.Guid id,
+        [FromBody] CreateCategoryDto dto,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var category = await context.PfmCategories.FindAsync(id);
+        if (category == null) return NotFound("Category not found.");
+
+        if (!string.IsNullOrEmpty(dto.Name)) category.Name = dto.Name;
+        if (!string.IsNullOrEmpty(dto.Icon)) category.Icon = dto.Icon;
+        if (!string.IsNullOrEmpty(dto.Color)) category.Color = dto.Color;
+        if (dto.DisplayOrder > 0) category.DisplayOrder = dto.DisplayOrder;
+        category.IsEnabled = dto.IsEnabled;
+
+        await context.SaveChangesAsync(default);
+        return Ok(category);
+    }
+
+    [HttpPut("subcategories/{id}")]
+    public async Task<IActionResult> UpdateSubcategory(
+        System.Guid id,
+        [FromBody] CreateSubcategoryDto dto,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        return await UpdateCategory(id, new CreateCategoryDto
+        {
+            Name = dto.Name,
+            ParentId = dto.CategoryId,
+            DisplayOrder = dto.DisplayOrder,
+            IsEnabled = dto.IsEnabled
+        }, context);
+    }
+
     [HttpPost("subcategories")]
     public async Task<IActionResult> AddSubcategory(
         [FromBody] CreateSubcategoryDto dto,
@@ -946,6 +1408,50 @@ public class StatementsController : ControllerBase
         var result = await _mailboxPuller.PullAndIngestEmailsAsync(dto);
         return Ok(result);
     }
+
+    private static ThemarIP.Domain.Enums.Pfm.RuleConditionField ParseConditionField(string? s) => (s?.ToLowerInvariant()) switch
+    {
+        "merchant_name" or "merchantname" => ThemarIP.Domain.Enums.Pfm.RuleConditionField.MerchantName,
+        "merchant_id" or "merchantid" => ThemarIP.Domain.Enums.Pfm.RuleConditionField.MerchantId,
+        "mcc" or "mcc_code" or "mcccode" => ThemarIP.Domain.Enums.Pfm.RuleConditionField.MccCode,
+        "type" or "transactiontype" or "transaction_type" => ThemarIP.Domain.Enums.Pfm.RuleConditionField.TransactionType,
+        "amount" => ThemarIP.Domain.Enums.Pfm.RuleConditionField.Amount,
+        "currency" => ThemarIP.Domain.Enums.Pfm.RuleConditionField.Currency,
+        _ => ThemarIP.Domain.Enums.Pfm.RuleConditionField.Narration
+    };
+
+    private static string MapConditionFieldToString(ThemarIP.Domain.Enums.Pfm.RuleConditionField f) => f switch
+    {
+        ThemarIP.Domain.Enums.Pfm.RuleConditionField.MerchantName => "merchant_name",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionField.MerchantId => "merchant_id",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionField.MccCode => "mcc",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionField.TransactionType => "type",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionField.Amount => "amount",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionField.Currency => "currency",
+        _ => "narration"
+    };
+
+    private static ThemarIP.Domain.Enums.Pfm.RuleConditionOperator ParseConditionOperator(string? s) => (s?.ToLowerInvariant()) switch
+    {
+        "equals" or "equal" => ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.Equals,
+        "starts_with" or "startswith" => ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.StartsWith,
+        "ends_with" or "endswith" => ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.EndsWith,
+        "greater_than" or "greaterthan" => ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.GreaterThan,
+        "less_than" or "lessthan" => ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.LessThan,
+        "between" => ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.Between,
+        _ => ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.Contains
+    };
+
+    private static string MapConditionOperatorToString(ThemarIP.Domain.Enums.Pfm.RuleConditionOperator op) => op switch
+    {
+        ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.Equals => "equals",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.StartsWith => "starts_with",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.EndsWith => "ends_with",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.GreaterThan => "greater_than",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.LessThan => "less_than",
+        ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.Between => "between",
+        _ => "contains"
+    };
 }
 
 public class CreateCategoryDto
@@ -999,5 +1505,25 @@ public class UserBankSelectionDto
     public string? BankCode { get; set; }
     public string? BankName { get; set; }
 }
+
+public class SaveCategorizationRuleDto
+{
+    public string Name { get; set; } = string.Empty;
+    public System.Guid? CategoryId { get; set; }
+    public System.Guid? SubcategoryId { get; set; }
+    public int Confidence { get; set; } = 85;
+    public int Priority { get; set; } = 50;
+    public string Status { get; set; } = "Active";
+    public System.Collections.Generic.List<SaveRuleConditionDto>? Conditions { get; set; }
+}
+
+public class SaveRuleConditionDto
+{
+    public string Field { get; set; } = "narration";
+    public string Operator { get; set; } = "contains";
+    public string Value { get; set; } = string.Empty;
+    public string Logic { get; set; } = "AND";
+}
+
 
 

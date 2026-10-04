@@ -280,15 +280,15 @@ const Utils = {
       return d.toLocaleString('en-GB', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
     },
   },
-  getCategoryName: (id) => {
-    if (!id) return '—';
-    const cleanId = String(id).toLowerCase();
-    return state.categories.find(c => String(c.id).toLowerCase() === cleanId)?.name || '—';
+  getCategoryName: (id, fallbackName) => {
+    if (!id && !fallbackName) return '—';
+    const cleanId = String(id || '').toLowerCase();
+    return state.categories.find(c => String(c.id).toLowerCase() === cleanId)?.name || fallbackName || '—';
   },
-  getSubcategoryName: (id) => {
-    if (!id) return '—';
-    const cleanId = String(id).toLowerCase();
-    return state.subcategories.find(s => String(s.id).toLowerCase() === cleanId)?.name || '—';
+  getSubcategoryName: (id, fallbackName) => {
+    if (!id && !fallbackName) return '—';
+    const cleanId = String(id || '').toLowerCase();
+    return state.subcategories.find(s => String(s.id).toLowerCase() === cleanId)?.name || fallbackName || '—';
   },
   getSubcatsForCategory: (catId) => {
     if (!catId) return [];
@@ -565,9 +565,11 @@ const Auth = {
     App.init();
     refreshIcons();
 
-    // Load CategoryRules and Merchants from themarip.db
+    // Load CategoryRules, Merchants, Confidence Settings, and Intelligence Rules from themarip.db
     await loadCategoryRulesFromDb();
     await loadMerchantsFromDb();
+    await loadConfidenceSettingsFromDb();
+    await loadIntelligenceRulesFromDb();
     loadRealTransactions();
     if (!Auth._pollInterval) {
       Auth._pollInterval = setInterval(loadRealTransactions, 5000);
@@ -591,11 +593,6 @@ async function loadCategoryRulesFromDb() {
       fetch(THEMAR_API_BASE + '/statements/category-rules'),
       fetch(THEMAR_API_BASE + '/statements/categories-hierarchy')
     ]);
-
-    if (rulesRes.ok) {
-      _dbCategoryRules = await rulesRes.json();
-      console.log(`[Engine] Loaded ${_dbCategoryRules.length} CategoryRules from themarip.db`);
-    }
 
     if (catRes.ok) {
       const dbCats = await catRes.json();
@@ -624,6 +621,40 @@ async function loadCategoryRulesFromDb() {
           }
         });
         console.log(`[Engine] Loaded ${state.categories.length} categories & ${state.subcategories.length} subcategories from themarip.db`);
+      }
+    }
+
+    if (rulesRes.ok) {
+      const dbRules = await rulesRes.json();
+      if (Array.isArray(dbRules) && dbRules.length > 0) {
+        _dbCategoryRules = dbRules;
+        state.rules = dbRules.map(r => ({
+          id: r.id,
+          name: r.name,
+          categoryId: r.categoryId,
+          categoryName: r.categoryName,
+          subcategoryId: r.subcategoryId,
+          subcategoryName: r.subcategoryName,
+          confidence: r.confidence,
+          priority: r.priority,
+          status: r.status,
+          matchCount: r.matchCount || 0,
+          isLearnedFromCorrection: r.isLearnedFromCorrection || false,
+          conditions: (r.conditions || []).map(c => ({
+            id: c.id,
+            field: c.field,
+            operator: c.operator || c.operatorName,
+            value: c.value,
+            logic: c.logic || 'AND'
+          }))
+        }));
+        console.log(`[Engine] Loaded ${state.rules.length} CategoryRules from themarip.db`);
+        if (typeof Rules !== 'undefined' && Rules.render) {
+          Rules.render();
+        }
+        if (typeof Nav !== 'undefined' && Nav.updateBadges) {
+          Nav.updateBadges();
+        }
       }
     }
   } catch (e) {
@@ -662,6 +693,63 @@ async function loadMerchantsFromDb() {
     }
   } catch (e) {
     console.error('[Engine] Failed to load merchants from themarip.db:', e);
+  }
+}
+
+async function loadConfidenceSettingsFromDb() {
+  try {
+    const res = await fetch(THEMAR_API_BASE + '/statements/confidence-settings');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.weights && data.bands) {
+        state.confidenceSettings = data;
+        console.log('[Engine] Loaded ConfidenceSettings from themarip.db');
+        if (typeof ConfidenceSettings !== 'undefined' && ConfidenceSettings.render) {
+          ConfidenceSettings.render();
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Engine] Failed to load ConfidenceSettings from themarip.db:', e);
+  }
+}
+
+async function loadIntelligenceRulesFromDb() {
+  try {
+    const res = await fetch(THEMAR_API_BASE + '/statements/intelligence-rules');
+    if (res.ok) {
+      const dbRules = await res.json();
+      if (Array.isArray(dbRules) && dbRules.length > 0) {
+        state.intelligenceRules = dbRules.map(r => {
+          const paramsObj = {};
+          (r.params || []).forEach(p => {
+            const num = parseFloat(p.paramValue);
+            paramsObj[p.paramKey] = isNaN(num) ? p.paramValue : num;
+          });
+          return {
+            id: r.id,
+            type: r.type.toLowerCase(),
+            name: r.name,
+            description: r.description,
+            status: r.status,
+            alertSeverity: r.alertSeverity.toLowerCase(),
+            cooldownHours: r.cooldownHours,
+            params: paramsObj,
+            icon: r.type.toLowerCase().includes('spending') ? 'credit-card' : r.type.toLowerCase().includes('balance') ? 'alert-triangle' : 'refresh-cw',
+            iconColor: r.alertSeverity.toLowerCase() === 'high' ? 'var(--accent-rose)' : 'var(--accent-amber)',
+            fireCount: 0,
+            lastFired: new Date().toISOString(),
+            insightTemplate: r.description
+          };
+        });
+        console.log(`[Engine] Loaded ${state.intelligenceRules.length} IntelligenceRules from themarip.db`);
+        if (typeof Intelligence !== 'undefined' && Intelligence.render) {
+          Intelligence.render();
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Engine] Failed to load IntelligenceRules from themarip.db:', e);
   }
 }
 
@@ -1331,8 +1419,25 @@ const Categories = {
     if (parentId) {
       // Subcategory (ParentId != null)
       if (id) {
-        const sub = state.subcategories.find(s=>s.id===id);
-        if (sub) { sub.name=name; Toast.success(`Subcategory updated.`); }
+        try {
+          const res = await fetch(`${THEMAR_API_BASE}/statements/subcategories/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categoryId: parentId, name: name, isEnabled: true })
+          });
+          if (res.ok) {
+            await loadCategoryRulesFromDb();
+            Toast.success(`Subcategory "${name}" updated and saved to themarip.db.`);
+          } else {
+            const sub = state.subcategories.find(s=>s.id===id);
+            if (sub) sub.name = name;
+            Toast.success(`Subcategory updated.`);
+          }
+        } catch(e) {
+          console.error(e);
+          const sub = state.subcategories.find(s=>s.id===id);
+          if (sub) sub.name = name;
+        }
       } else {
         try {
           const res = await fetch(THEMAR_API_BASE + '/statements/categories', {
@@ -1351,8 +1456,26 @@ const Categories = {
     } else {
       // Root Category (ParentId == null)
       if (id) {
-        const cat = state.categories.find(c=>c.id===id);
-        if (cat) { cat.name=name; cat.icon=icon; Toast.success(`Category updated.`); }
+        try {
+          const cat = state.categories.find(c=>c.id===id);
+          const color = cat?.color || '#7C3AED';
+          const res = await fetch(`${THEMAR_API_BASE}/statements/categories/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, icon: icon, color: color, isEnabled: true })
+          });
+          if (res.ok) {
+            await loadCategoryRulesFromDb();
+            Toast.success(`Category "${name}" updated and saved to themarip.db.`);
+          } else {
+            if (cat) { cat.name=name; cat.icon=icon; }
+            Toast.success(`Category updated.`);
+          }
+        } catch(e) {
+          console.error(e);
+          const cat = state.categories.find(c=>c.id===id);
+          if (cat) { cat.name=name; cat.icon=icon; }
+        }
       } else {
         try {
           const colors = ['#10B981','#3B82F6','#8B5CF6','#F59E0B','#F43F5E','#06B6D4','#F97316'];
@@ -1420,7 +1543,7 @@ const Rules = {
         return `<tr>
           <td style="font-weight:600;">${r.name}</td>
           <td style="font-size:12px;color:var(--text-muted);max-width:200px;" class="truncate" title="${condSummary}">${condSummary}</td>
-          <td><span style="font-weight:500;">${Utils.getCategoryName(r.categoryId)}</span><span style="color:var(--text-dim);font-size:12px;"> → ${Utils.getSubcategoryName(r.subcategoryId)}</span></td>
+          <td><span style="font-weight:500;">${Utils.getCategoryName(r.categoryId, r.categoryName)}</span><span style="color:var(--text-dim);font-size:12px;"> → ${Utils.getSubcategoryName(r.subcategoryId, r.subcategoryName)}</span></td>
           <td>${Utils.confidenceBadge(r.confidence)}</td>
           <td style="text-align:center;">${Utils.priorityBadge(r.priority)}</td>
           <td style="color:var(--text-muted);font-size:12px;">${Utils.fmt.number(r.matchCount)}</td>
@@ -1519,14 +1642,14 @@ const Rules = {
     refreshIcons();
   },
 
-  saveModal() {
+  async saveModal() {
     const id = document.getElementById('rule-form-id').value;
     const name = document.getElementById('rule-form-name').value.trim();
-    const priority = parseInt(document.getElementById('rule-form-priority').value);
-    const confidence = parseInt(document.getElementById('rule-form-confidence').value);
-    const status = document.getElementById('rule-form-status').value;
-    const categoryId = document.getElementById('rule-form-category').value;
-    const subcategoryId = document.getElementById('rule-form-subcategory').value;
+    const priority = parseInt(document.getElementById('rule-form-priority').value) || 50;
+    const confidence = parseInt(document.getElementById('rule-form-confidence').value) || 85;
+    const status = document.getElementById('rule-form-status').value || 'active';
+    const categoryId = document.getElementById('rule-form-category').value || null;
+    const subcategoryId = document.getElementById('rule-form-subcategory').value || null;
 
     if (!name) { Toast.error('Rule name is required.'); return; }
     if (!categoryId) { Toast.error('Please select a category.'); return; }
@@ -1542,32 +1665,107 @@ const Rules = {
     });
     if (conditions.length === 0) { Toast.error('Add at least one condition.'); return; }
 
-    if (id) {
-      const rule = state.rules.find(r=>r.id===id);
-      if (rule) {
+    const payload = {
+      name,
+      priority,
+      confidence,
+      status,
+      categoryId,
+      subcategoryId,
+      conditions
+    };
+
+    try {
+      if (id && id.length > 10 && !id.startsWith('rule-')) {
+        // Existing DB rule (GUID)
+        const res = await fetch(`${THEMAR_API_BASE}/statements/category-rules/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('API update failed');
+
+        const rule = state.rules.find(r=>r.id===id);
+        if (rule) {
+          Object.assign(rule, {
+            name,
+            conditions,
+            categoryId,
+            subcategoryId,
+            categoryName: Utils.getCategoryName(categoryId),
+            subcategoryName: Utils.getSubcategoryName(subcategoryId),
+            confidence,
+            priority,
+            status
+          });
+        }
         AuditLog.record('UPDATE','Rule',`Updated rule: ${name}`);
-        Object.assign(rule, { name, conditions, categoryId, subcategoryId, confidence, priority, status });
-        Toast.success(`Rule "${name}" updated.`);
+        Toast.success(`Rule "${name}" updated and saved to themarip.db!`);
+      } else {
+        // Create new rule in themarip.db
+        const res = await fetch(`${THEMAR_API_BASE}/statements/category-rules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('API create failed');
+        const created = await res.json();
+        const newId = created.id || ('rule-' + Date.now());
+
+        const newRule = {
+          id: newId,
+          name,
+          conditions,
+          categoryId,
+          subcategoryId,
+          categoryName: Utils.getCategoryName(categoryId),
+          subcategoryName: Utils.getSubcategoryName(subcategoryId),
+          confidence,
+          priority,
+          status,
+          matchCount: 0
+        };
+        state.rules.unshift(newRule);
+        AuditLog.record('CREATE','Rule',`Created rule: ${name} → ${Utils.getCategoryName(categoryId)} / ${Utils.getSubcategoryName(subcategoryId)}`);
+        Toast.success(`Rule "${name}" created and saved to themarip.db!`);
       }
-    } else {
-      const newRule = { id:'rule-'+Date.now(), name, conditions, categoryId, subcategoryId, confidence, priority, status, matchCount:0 };
-      state.rules.push(newRule);
-      AuditLog.record('CREATE','Rule',`Created rule: ${name} → ${Utils.getCategoryName(categoryId)} / ${Utils.getSubcategoryName(subcategoryId)}`);
-      Toast.success(`Rule "${name}" created.`);
+    } catch (err) {
+      console.error('Error saving rule to themarip.db:', err);
+      Toast.error('Failed to save rule to themarip.db.');
+      return;
     }
+
     Modal.close('rule-modal-overlay');
     Rules.render();
     Nav.updateBadges();
   },
 
-  toggleRule(ruleId) {
+  async toggleRule(ruleId) {
     const rule = state.rules.find(r=>r.id===ruleId);
     if (!rule) return;
-    rule.status = rule.status==='active' ? 'inactive' : 'active';
-    AuditLog.record('TOGGLE','Rule',`${rule.status==='active'?'Activated':'Deactivated'} rule: ${rule.name}`);
-    Toast.success(`Rule "${rule.name}" ${rule.status}.`);
-    Rules.render();
-    Nav.updateBadges();
+
+    try {
+      if (ruleId && ruleId.length > 10 && !ruleId.startsWith('rule-')) {
+        const res = await fetch(`${THEMAR_API_BASE}/statements/category-rules/${ruleId}/toggle`, {
+          method: 'PATCH'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          rule.status = data.status || (rule.status === 'active' ? 'inactive' : 'active');
+        } else {
+          rule.status = rule.status === 'active' ? 'inactive' : 'active';
+        }
+      } else {
+        rule.status = rule.status === 'active' ? 'inactive' : 'active';
+      }
+      AuditLog.record('TOGGLE','Rule',`${rule.status==='active'?'Activated':'Deactivated'} rule: ${rule.name}`);
+      Toast.success(`Rule "${rule.name}" ${rule.status} in themarip.db.`);
+      Rules.render();
+      Nav.updateBadges();
+    } catch (err) {
+      console.error('Error toggling rule:', err);
+      Toast.error('Failed to toggle rule.');
+    }
   },
 
   async deleteRule(ruleId) {
@@ -1575,11 +1773,22 @@ const Rules = {
     if (!rule) return;
     const confirmed = await Confirm.show('Delete Rule', `Are you sure you want to delete "${rule.name}"? This cannot be undone.`, 'Delete', true);
     if (confirmed) {
-      state.rules = state.rules.filter(r=>r.id!==ruleId);
-      AuditLog.record('DELETE','Rule',`Deleted rule: ${rule.name}`);
-      Toast.success(`Rule deleted.`);
-      Rules.render();
-      Nav.updateBadges();
+      try {
+        if (ruleId && ruleId.length > 10 && !ruleId.startsWith('rule-')) {
+          const res = await fetch(`${THEMAR_API_BASE}/statements/category-rules/${ruleId}`, {
+            method: 'DELETE'
+          });
+          if (!res.ok) throw new Error('API delete failed');
+        }
+        state.rules = state.rules.filter(r=>r.id!==ruleId);
+        AuditLog.record('DELETE','Rule',`Deleted rule: ${rule.name}`);
+        Toast.success(`Rule deleted from themarip.db.`);
+        Rules.render();
+        Nav.updateBadges();
+      } catch (err) {
+        console.error('Error deleting rule from themarip.db:', err);
+        Toast.error('Failed to delete rule from themarip.db.');
+      }
     }
   },
 
@@ -1883,13 +2092,12 @@ const ConfidenceSettings = {
     if (el) { el.textContent = total + '%'; el.style.color = total===100 ? 'var(--accent-emerald)' : 'var(--accent-rose)'; }
   },
 
-  save() {
+  async save() {
     const vals = ['w-merchant','w-mcc','w-narration','w-historical','w-amount'].map(id=>parseInt(document.getElementById(id)?.value||0));
     const total = vals.reduce((a,b)=>a+b,0);
     if (total !== 100) { Toast.error(`Weights must total 100%. Currently: ${total}%`); return; }
 
-    const prev = JSON.stringify(state.confidenceSettings);
-    state.confidenceSettings = {
+    const newSettings = {
       weights: { merchantMatch:vals[0], mccMatch:vals[1], narrationMatch:vals[2], historicalMatch:vals[3], amountPattern:vals[4] },
       bands: {
         high:   { min:parseInt(document.getElementById('band-high-min').value), max:parseInt(document.getElementById('band-high-max').value), action:document.getElementById('band-high-action').value },
@@ -1897,8 +2105,21 @@ const ConfidenceSettings = {
         low:    { min:parseInt(document.getElementById('band-low-min').value),   max:parseInt(document.getElementById('band-low-max').value),   action:document.getElementById('band-low-action').value },
       }
     };
-    AuditLog.record('UPDATE','ConfidenceSettings','Updated confidence thresholds and scoring weights');
-    Toast.success('Confidence settings saved successfully.');
+
+    try {
+      const res = await fetch(`${THEMAR_API_BASE}/statements/confidence-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings)
+      });
+      if (!res.ok) throw new Error('API save failed');
+      state.confidenceSettings = newSettings;
+      AuditLog.record('UPDATE','ConfidenceSettings','Updated confidence thresholds and scoring weights in themarip.db');
+      Toast.success('Confidence settings saved to themarip.db successfully!');
+    } catch(err) {
+      console.error('Error saving confidence settings:', err);
+      Toast.error('Failed to save confidence settings to themarip.db.');
+    }
   },
 
   initEvents() {
@@ -2188,13 +2409,31 @@ const Intelligence = {
       </div>`).join('');
   },
 
-  toggle(ruleId) {
+  async toggle(ruleId) {
     const rule = state.intelligenceRules.find(r=>r.id===ruleId);
     if (!rule) return;
-    rule.status = rule.status==='active' ? 'inactive' : 'active';
-    AuditLog.record('TOGGLE','IntelligenceRule',`${rule.status==='active'?'Activated':'Deactivated'} intelligence rule: ${rule.name}`);
-    Toast.success(`Intelligence rule "${rule.name}" ${rule.status}.`);
-    Intelligence.render();
+
+    try {
+      if (ruleId && ruleId.length > 10) {
+        const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules/${ruleId}/toggle`, {
+          method: 'PATCH'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          rule.status = data.status || (rule.status === 'active' ? 'inactive' : 'active');
+        } else {
+          rule.status = rule.status === 'active' ? 'inactive' : 'active';
+        }
+      } else {
+        rule.status = rule.status === 'active' ? 'inactive' : 'active';
+      }
+      AuditLog.record('TOGGLE','IntelligenceRule',`${rule.status==='active'?'Activated':'Deactivated'} intelligence rule: ${rule.name}`);
+      Toast.success(`Intelligence rule "${rule.name}" ${rule.status} in themarip.db.`);
+      Intelligence.render();
+    } catch(err) {
+      console.error('Error toggling intelligence rule:', err);
+      Toast.error('Failed to toggle intelligence rule.');
+    }
   },
 
   openModal(ruleId) {
@@ -2233,7 +2472,7 @@ const Intelligence = {
     Modal.open('intel-modal-overlay');
   },
 
-  saveModal() {
+  async saveModal() {
     const ruleId = document.getElementById('intel-form-rule-id').value;
     const rule = state.intelligenceRules.find(r=>r.id===ruleId);
     if (!rule) return;
@@ -2249,8 +2488,32 @@ const Intelligence = {
       rule.params[key] = isNaN(num) ? val : num;
     });
 
+    if (ruleId && ruleId.length > 10) {
+      try {
+        const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules/${ruleId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: rule.name,
+            insightTemplate: rule.insightTemplate,
+            status: rule.status,
+            params: rule.params
+          })
+        });
+        if (res.ok) {
+          Toast.success(`Intelligence rule "${rule.name}" updated in themarip.db.`);
+        } else {
+          Toast.success(`Intelligence rule "${rule.name}" updated.`);
+        }
+      } catch(e) {
+        console.error(e);
+        Toast.success(`Intelligence rule "${rule.name}" updated.`);
+      }
+    } else {
+      Toast.success(`Intelligence rule "${rule.name}" updated.`);
+    }
+
     AuditLog.record('UPDATE','IntelligenceRule',`Updated intelligence rule: ${rule.name}`);
-    Toast.success(`Intelligence rule "${rule.name}" updated.`);
     Modal.close('intel-modal-overlay');
     Intelligence.render();
   },

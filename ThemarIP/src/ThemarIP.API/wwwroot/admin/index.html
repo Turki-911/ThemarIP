@@ -772,12 +772,12 @@
               <tr>
                 <th style="padding:12px 16px;">User / Full Name</th>
                 <th style="padding:12px 16px;">Email</th>
-                <th style="padding:12px 16px;">Account Number</th>
+                <th style="padding:12px 16px;">Bank's Selection</th>
                 <th style="padding:12px 16px;">Role</th>
                 <th style="padding:12px 16px;">Access Status</th>
                 <th style="padding:12px 16px;">Trust Score</th>
                 <th style="padding:12px 16px;">Joined</th>
-                <th style="padding:12px 16px;text-align:right;">Control</th>
+                <th style="padding:12px 16px;text-align:right;">Control & Profile</th>
               </tr>
             </thead>
             <tbody id="users-table-body">
@@ -976,6 +976,117 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" id="intel-modal-cancel">Cancel</button>
       <button class="btn btn-primary" id="intel-modal-save"><i data-lucide="save"></i> Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- USER PROFILE MANAGEMENT & CONTROL MODAL                      -->
+<!-- ============================================================ -->
+<div id="user-profile-modal-overlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width: 580px; width: 100%;">
+    <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:36px; height:36px; border-radius:10px; background:rgba(124,58,237,0.15); color:#A78BFA; display:flex; align-items:center; justify-content:center;">
+          <i data-lucide="user-check"></i>
+        </div>
+        <div>
+          <h2 class="modal-title" style="margin:0;">User Profile & Control</h2>
+          <span style="font-size:12px; color:var(--text-muted);">Manage bank selection, trust scoring & governance</span>
+        </div>
+      </div>
+      <button class="btn-icon" id="user-profile-modal-close" style="background:none; border:none; color:var(--text-muted); cursor:pointer;"><i data-lucide="x"></i></button>
+    </div>
+    
+    <div class="modal-body" style="padding:20px; display:flex; flex-direction:column; gap:18px;">
+      <!-- User Summary Card -->
+      <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; display:flex; align-items:center; gap:14px;">
+        <div id="modal-user-avatar" style="width:44px; height:44px; border-radius:50%; background:rgba(124,58,237,0.2); color:#A78BFA; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px;">
+          U
+        </div>
+        <div style="flex:1;">
+          <div id="modal-user-name" style="font-size:15px; font-weight:700; color:var(--text-primary);">User Name</div>
+          <div id="modal-user-email" style="font-size:12px; color:var(--text-muted);">user@example.com</div>
+          <div id="modal-user-meta" style="font-size:11px; color:var(--text-dim); margin-top:3px;">ID: -- &bull; Joined: --</div>
+        </div>
+        <div id="modal-user-status-pill">
+          <!-- Status badge -->
+        </div>
+      </div>
+
+      <!-- Bank Selection & Connection Status -->
+      <div style="background:rgba(16,185,129,0.04); border:1px solid rgba(16,185,129,0.18); border-radius:12px; padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span style="font-size:12px; font-weight:700; color:var(--accent-emerald, #10B981); text-transform:uppercase; letter-spacing:0.5px;">
+            <i data-lucide="landmark" style="width:13px; height:13px; vertical-align:middle; margin-right:4px;"></i>Bank Selection & Connected Statements
+          </span>
+          <span id="modal-user-tx-count" style="font-size:12px; font-weight:700; color:var(--text-primary);">0 txns</span>
+        </div>
+        <div id="modal-user-banks-list" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <!-- Dynamically populated bank chips -->
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" style="font-size:12px;">Primary Bank Assignment</label>
+          <select id="modal-user-primary-bank" class="form-control" style="font-size:13px;">
+            <option value="">-- No Bank Selected --</option>
+            <option value="Bank Muscat">Bank Muscat</option>
+            <option value="National Bank of Oman (NBO)">National Bank of Oman (NBO)</option>
+            <option value="Bank Dhofar">Bank Dhofar</option>
+            <option value="Oman Arab Bank (OAB)">Oman Arab Bank (OAB)</option>
+            <option value="Sohar International">Sohar International</option>
+            <option value="Ahli Bank">Ahli Bank</option>
+            <option value="National Bank of Bahrain - Oman">National Bank of Bahrain (NBB) - Oman</option>
+            <option value="Bank Nizwa">Bank Nizwa</option>
+            <option value="Alizz Islamic Bank">Alizz Islamic Bank</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Trust Score & Risk Control -->
+      <div style="background:rgba(124,58,237,0.04); border:1px solid rgba(124,58,237,0.2); border-radius:12px; padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <span style="font-size:12px; font-weight:700; color:#A78BFA; text-transform:uppercase; letter-spacing:0.5px;">
+            <i data-lucide="shield" style="width:13px; height:13px; vertical-align:middle; margin-right:4px;"></i>Trust & Governance Score (0 - 100)
+          </span>
+          <span id="modal-score-display" style="font-size:18px; font-weight:800; color:#34D399;">85</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <input type="range" id="modal-score-slider" min="0" max="100" value="85" style="flex:1; accent-color:#7C3AED; cursor:pointer;">
+          <input type="number" id="modal-score-number" min="0" max="100" value="85" class="form-control" style="width:70px; text-align:center; font-weight:700;">
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
+          <button type="button" class="btn btn-xs btn-score-preset" data-score="100" style="background:rgba(16,185,129,0.15); color:#34D399; border:1px solid rgba(16,185,129,0.3);">100 CBO Verified</button>
+          <button type="button" class="btn btn-xs btn-score-preset" data-score="85" style="background:rgba(56,189,248,0.15); color:#38BDF8; border:1px solid rgba(56,189,248,0.3);">85 High Trust</button>
+          <button type="button" class="btn btn-xs btn-score-preset" data-score="65" style="background:rgba(245,158,11,0.15); color:#FBBF24; border:1px solid rgba(245,158,11,0.3);">65 Standard</button>
+          <button type="button" class="btn btn-xs btn-score-preset" data-score="35" style="background:rgba(239,68,68,0.15); color:#F87171; border:1px solid rgba(239,68,68,0.3);">35 Under Review</button>
+          <button type="button" class="btn btn-xs btn-score-preset" data-score="0" style="background:rgba(255,255,255,0.06); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1);">0 Unrated</button>
+        </div>
+      </div>
+
+      <!-- Access Status & Role Controls -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" style="font-size:12px;">Access Status</label>
+          <select id="modal-user-status" class="form-control" style="font-size:13px;">
+            <option value="Approved">Approved (Full Access)</option>
+            <option value="Pending">Pending (Under Review)</option>
+            <option value="Rejected">Rejected (Restricted)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label" style="font-size:12px;">Account Role</label>
+          <select id="modal-user-role" class="form-control" style="font-size:13px;">
+            <option value="User">User (Standard)</option>
+            <option value="Auditor">Auditor (Inspector)</option>
+            <option value="Admin">Admin (Full Control)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer" style="padding:16px 20px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid rgba(255,255,255,0.08);">
+      <button class="btn btn-secondary" id="user-profile-cancel">Cancel</button>
+      <button class="btn btn-primary" id="user-profile-save"><i data-lucide="check"></i> Save Profile & Score</button>
     </div>
   </div>
 </div>

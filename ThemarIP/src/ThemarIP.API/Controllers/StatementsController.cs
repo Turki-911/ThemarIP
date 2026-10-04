@@ -77,18 +77,115 @@ public class StatementsController : ControllerBase
     public async Task<IActionResult> GetUsers([FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
     {
         var users = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.Users);
-        var result = users.Select(u => new
+        var txList = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            context.PfmTransactions
+                .Select(t => new { UserId = t.UserId, BankCode = t.BankCode, BankName = t.BankName })
+        );
+
+        var txByUser = txList
+            .GroupBy(t => t.UserId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(x => new { Code = x.BankCode ?? "BANK_MUSCAT", Name = x.BankName ?? "Bank Muscat" })
+                      .Select(bg => new UserBankSummaryDto { Code = bg.Key.Code, Name = bg.Key.Name, TxCount = bg.Count() })
+                      .ToList()
+            );
+
+        var result = users.Select(u =>
         {
-            id = u.Id,
-            email = u.Email,
-            fullName = u.FullName,
-            accountNumber = u.AccountNumber,
-            role = u.Role.ToString(),
-            accessStatus = u.AccessStatus.ToString(),
-            trustScore = u.TrustScore,
-            createdAt = u.CreatedAt
+            txByUser.TryGetValue(u.Id, out var userBanks);
+            userBanks ??= new List<UserBankSummaryDto>();
+
+            var connectedBanks = userBanks.Select(b => b.Name).ToList();
+            var primaryBank = userBanks.FirstOrDefault()?.Name ?? (!string.IsNullOrEmpty(u.AccountNumber) ? u.AccountNumber : null);
+            var totalTx = userBanks.Sum(b => b.TxCount);
+
+            return new
+            {
+                id = u.Id,
+                email = u.Email,
+                fullName = u.FullName,
+                accountNumber = u.AccountNumber,
+                banks = userBanks,
+                connectedBanks = connectedBanks,
+                primaryBank = primaryBank,
+                totalTransactions = totalTx,
+                role = u.Role.ToString(),
+                accessStatus = u.AccessStatus.ToString(),
+                trustScore = u.TrustScore,
+                createdAt = u.CreatedAt
+            };
         }).OrderByDescending(u => u.createdAt).ToList();
+
         return Ok(result);
+    }
+
+    [HttpPatch("users/{id}/profile")]
+    public async Task<IActionResult> UpdateUserProfile(
+        System.Guid id,
+        [FromBody] UpdateUserProfileDto dto,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var user = await context.Users.FindAsync(id);
+        if (user == null) return NotFound("User not found.");
+
+        if (!string.IsNullOrEmpty(dto.AccessStatus) &&
+            System.Enum.TryParse<ThemarIP.Domain.Enums.AccessStatus>(dto.AccessStatus, true, out var status))
+        {
+            user.AccessStatus = status;
+        }
+
+        if (dto.TrustScore.HasValue)
+        {
+            user.TrustScore = System.Math.Clamp(dto.TrustScore.Value, 0, 100);
+        }
+
+        if (!string.IsNullOrEmpty(dto.Role) &&
+            System.Enum.TryParse<ThemarIP.Domain.Enums.UserRole>(dto.Role, true, out var role))
+        {
+            user.Role = role;
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.FullName))
+        {
+            user.FullName = dto.FullName.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.PrimaryBank))
+        {
+            user.AccountNumber = dto.PrimaryBank.Trim();
+        }
+
+        await context.SaveChangesAsync(default);
+        return Ok(new
+        {
+            message = "User profile updated successfully.",
+            user = new
+            {
+                id = user.Id,
+                fullName = user.FullName,
+                email = user.Email,
+                role = user.Role.ToString(),
+                accessStatus = user.AccessStatus.ToString(),
+                trustScore = user.TrustScore,
+                accountNumber = user.AccountNumber,
+                primaryBank = user.AccountNumber
+            }
+        });
+    }
+
+    [HttpPatch("users/{id}/score")]
+    public async Task<IActionResult> UpdateUserTrustScore(
+        System.Guid id,
+        [FromBody] UpdateScoreDto dto,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var user = await context.Users.FindAsync(id);
+        if (user == null) return NotFound("User not found.");
+
+        user.TrustScore = System.Math.Clamp(dto.TrustScore, 0, 100);
+        await context.SaveChangesAsync(default);
+        return Ok(new { message = "Trust score updated.", trustScore = user.TrustScore });
     }
 
     [HttpPatch("users/{id}/status")]
@@ -804,5 +901,26 @@ public class CreateSubcategoryDto
 public class UpdateStatusDto
 {
     public string Status { get; set; } = "Active";
+}
+
+public class UserBankSummaryDto
+{
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int TxCount { get; set; }
+}
+
+public class UpdateUserProfileDto
+{
+    public string? AccessStatus { get; set; }
+    public int? TrustScore { get; set; }
+    public string? Role { get; set; }
+    public string? FullName { get; set; }
+    public string? PrimaryBank { get; set; }
+}
+
+public class UpdateScoreDto
+{
+    public int TrustScore { get; set; }
 }
 

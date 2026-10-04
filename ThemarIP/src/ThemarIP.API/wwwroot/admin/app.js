@@ -2339,6 +2339,46 @@ const Users = {
       const statusColor = isApproved ? 'var(--accent-emerald, #10B981)' : (isRejected ? 'var(--accent-rose, #F43F5E)' : 'var(--accent-amber, #F59E0B)');
       const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB') : '--';
 
+      // 1. Bank Selection & Connected Statement formatting
+      let banksHtml = '';
+      if (u.banks && u.banks.length > 0) {
+        banksHtml = u.banks.map(b => `
+          <div style="margin:2px 0;">
+            <span class="badge" style="background:rgba(16,185,129,0.12);color:#34D399;border:1px solid rgba(16,185,129,0.25);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
+              <i data-lucide="landmark" style="width:11px;height:11px;"></i>
+              ${b.name || b.code} <span style="opacity:0.75;font-weight:400;">(${b.txCount || 0} tx)</span>
+            </span>
+          </div>
+        `).join('');
+      } else if (u.connectedBanks && u.connectedBanks.length > 0) {
+        banksHtml = u.connectedBanks.map(b => `
+          <div style="margin:2px 0;">
+            <span class="badge" style="background:rgba(16,185,129,0.12);color:#34D399;border:1px solid rgba(16,185,129,0.25);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
+              <i data-lucide="landmark" style="width:11px;height:11px;"></i>
+              ${b}
+            </span>
+          </div>
+        `).join('');
+      } else if (u.primaryBank || u.accountNumber) {
+        const bankName = u.primaryBank || u.accountNumber;
+        banksHtml = `
+          <span class="badge" style="background:rgba(56,189,248,0.12);color:#38BDF8;border:1px solid rgba(56,189,248,0.25);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
+            <i data-lucide="landmark" style="width:11px;height:11px;"></i>
+            ${bankName}
+          </span>
+        `;
+      } else {
+        banksHtml = `<span style="color:var(--text-dim);font-size:11px;font-style:italic;">No bank linked</span>`;
+      }
+
+      // 2. Trust Score visual formatting
+      const score = typeof u.trustScore === 'number' ? u.trustScore : 0;
+      let scoreBadgeColor = '#94A3B8';
+      let scoreBg = 'rgba(148,163,184,0.12)';
+      if (score >= 80) { scoreBadgeColor = '#34D399'; scoreBg = 'rgba(16,185,129,0.15)'; }
+      else if (score >= 50) { scoreBadgeColor = '#FBBF24'; scoreBg = 'rgba(245,158,11,0.15)'; }
+      else if (score > 0) { scoreBadgeColor = '#F87171'; scoreBg = 'rgba(239,68,68,0.15)'; }
+
       return `
         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
           <td style="padding:14px 16px;">
@@ -2353,7 +2393,9 @@ const Users = {
             </div>
           </td>
           <td style="padding:14px 16px;color:var(--text-muted);font-size:13px;">${u.email}</td>
-          <td style="padding:14px 16px;font-family:monospace;font-size:12px;color:var(--accent-cyan,#06B6D4);">${u.accountNumber || '—'}</td>
+          <td style="padding:14px 16px;">
+            ${banksHtml}
+          </td>
           <td style="padding:14px 16px;">
             <span class="badge" style="background:${isAdmin ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)'};color:${isAdmin ? '#10B981' : 'inherit'};font-weight:${isAdmin ? '700' : '500'};font-size:11px;">
               ${u.role}
@@ -2364,21 +2406,30 @@ const Users = {
               ${u.accessStatus}
             </span>
           </td>
-          <td style="padding:14px 16px;font-weight:600;color:var(--text-muted);">${u.trustScore || 0}</td>
+          <td style="padding:14px 16px;">
+            <div class="open-user-profile-btn" data-user-id="${u.id}" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;" title="Click to view profile & adjust score">
+              <span class="badge" style="background:${scoreBg};color:${scoreBadgeColor};font-weight:700;font-size:11.5px;padding:3px 8px;border:1px solid ${scoreBadgeColor}44;">
+                <i data-lucide="shield" style="width:11px;height:11px;margin-right:2px;"></i>${score}
+              </span>
+            </div>
+          </td>
           <td style="padding:14px 16px;color:var(--text-dim);font-size:12px;">${dateStr}</td>
           <td style="padding:14px 16px;text-align:right;">
-            ${isAdmin ? `
-              <span class="badge" style="background:rgba(16,185,129,0.12);color:#10B981;font-size:11px;padding:4px 8px;">System Admin</span>
-            ` : `
-              <div style="display:inline-flex;gap:6px;">
+            <div style="display:inline-flex;gap:6px;">
+              <button class="btn btn-xs open-user-profile-btn" data-user-id="${u.id}" style="background:rgba(124,58,237,0.15);color:#A78BFA;border:1px solid rgba(124,58,237,0.3);" title="Profile & Score Management">
+                <i data-lucide="user-cog" style="width:12px;height:12px;"></i> Manage
+              </button>
+              ${isAdmin ? `
+                <span class="badge" style="background:rgba(16,185,129,0.12);color:#10B981;font-size:11px;padding:4px 8px;">Admin</span>
+              ` : `
                 <button class="btn btn-xs ${isApproved ? 'btn-secondary' : 'btn-primary'} toggle-user-status-btn" data-user-id="${u.id}" data-current-status="${u.accessStatus}">
                   ${isApproved ? 'Revoke' : 'Approve'}
                 </button>
                 <button class="btn btn-xs delete-user-btn" data-user-id="${u.id}" data-user-email="${u.email}" style="background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.3);">
-                  <i data-lucide="trash-2"></i> Delete
+                  <i data-lucide="trash-2"></i>
                 </button>
-              </div>
-            `}
+              `}
+            </div>
           </td>
         </tr>
       `;
@@ -2388,9 +2439,140 @@ const Users = {
     this.bindEvents();
   },
 
+  openProfileModal(userId) {
+    const user = this._users.find(u => u.id === userId);
+    if (!user) return;
+    this._activeEditingUserId = userId;
+
+    const overlay = document.getElementById('user-profile-modal-overlay');
+    if (!overlay) return;
+
+    // Prefill info
+    const avatar = document.getElementById('modal-user-avatar');
+    if (avatar) avatar.textContent = (user.fullName || user.email || 'U')[0].toUpperCase();
+
+    const nameEl = document.getElementById('modal-user-name');
+    if (nameEl) nameEl.textContent = user.fullName || 'No Name';
+
+    const emailEl = document.getElementById('modal-user-email');
+    if (emailEl) emailEl.textContent = user.email || '';
+
+    const metaEl = document.getElementById('modal-user-meta');
+    if (metaEl) {
+      const joined = user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-GB') : '--';
+      metaEl.textContent = `ID: ${user.id} • Joined: ${joined}`;
+    }
+
+    const isApproved = (user.accessStatus || '').toLowerCase() === 'approved';
+    const isRejected = (user.accessStatus || '').toLowerCase() === 'rejected';
+    const statusColor = isApproved ? 'var(--accent-emerald, #10B981)' : (isRejected ? 'var(--accent-rose, #F43F5E)' : 'var(--accent-amber, #F59E0B)');
+    const statusPill = document.getElementById('modal-user-status-pill');
+    if (statusPill) {
+      statusPill.innerHTML = `<span class="badge" style="background:${statusColor}22;color:${statusColor};font-weight:700;font-size:11px;">${user.accessStatus}</span>`;
+    }
+
+    // Banks list
+    const banksList = document.getElementById('modal-user-banks-list');
+    const txCountEl = document.getElementById('modal-user-tx-count');
+    if (banksList) {
+      if (user.banks && user.banks.length > 0) {
+        banksList.innerHTML = user.banks.map(b => `
+          <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:6px;font-size:12px;color:#34D399;font-weight:600;">
+            <i data-lucide="check-circle" style="width:13px;height:13px;"></i>
+            ${b.name || b.code} &bull; ${b.txCount || 0} Transactions
+          </div>
+        `).join('');
+        if (txCountEl) txCountEl.textContent = `${user.totalTransactions || 0} Total Transactions`;
+      } else {
+        banksList.innerHTML = `<span style="color:var(--text-dim);font-size:12px;font-style:italic;">No bank statements imported yet for this profile.</span>`;
+        if (txCountEl) txCountEl.textContent = `0 txns`;
+      }
+    }
+
+    // Primary bank selector
+    const primaryBankSel = document.getElementById('modal-user-primary-bank');
+    if (primaryBankSel) {
+      primaryBankSel.value = user.primaryBank || user.accountNumber || (user.banks && user.banks[0] ? user.banks[0].name : '');
+    }
+
+    // Trust score slider & number
+    const score = typeof user.trustScore === 'number' ? user.trustScore : 0;
+    const slider = document.getElementById('modal-score-slider');
+    const number = document.getElementById('modal-score-number');
+    const display = document.getElementById('modal-score-display');
+    if (slider) slider.value = score;
+    if (number) number.value = score;
+    if (display) {
+      display.textContent = score;
+      display.style.color = score >= 80 ? '#34D399' : (score >= 50 ? '#FBBF24' : '#F87171');
+    }
+
+    // Access Status & Role
+    const statusSel = document.getElementById('modal-user-status');
+    if (statusSel) statusSel.value = user.accessStatus || 'Pending';
+
+    const roleSel = document.getElementById('modal-user-role');
+    if (roleSel) roleSel.value = user.role || 'User';
+
+    overlay.classList.remove('hidden');
+    refreshIcons();
+  },
+
+  closeProfileModal() {
+    const overlay = document.getElementById('user-profile-modal-overlay');
+    if (overlay) overlay.classList.add('hidden');
+    this._activeEditingUserId = null;
+  },
+
+  async saveProfile() {
+    if (!this._activeEditingUserId) return;
+    const userId = this._activeEditingUserId;
+
+    const accessStatus = document.getElementById('modal-user-status')?.value || 'Pending';
+    const role = document.getElementById('modal-user-role')?.value || 'User';
+    const trustScore = parseInt(document.getElementById('modal-score-slider')?.value || '0', 10);
+    const primaryBank = document.getElementById('modal-user-primary-bank')?.value || '';
+
+    try {
+      const res = await fetch(`${THEMAR_API_BASE}/statements/users/${userId}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessStatus,
+          role,
+          trustScore,
+          primaryBank
+        })
+      });
+
+      if (res.ok) {
+        Toast.success('User profile & score updated successfully!');
+        this.closeProfileModal();
+        await Users.render();
+      } else {
+        const err = await res.text();
+        Toast.error(err || 'Failed to update profile.');
+      }
+    } catch (e) {
+      console.error(e);
+      Toast.error('Network error updating user profile.');
+    }
+  },
+
   bindEvents() {
+    // Open profile modal
+    document.querySelectorAll('.open-user-profile-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const userId = btn.dataset.userId;
+        if (userId) Users.openProfileModal(userId);
+      });
+    });
+
+    // Toggle status button
     document.querySelectorAll('.toggle-user-status-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         const userId = btn.dataset.userId;
         const current = (btn.dataset.currentStatus || '').toLowerCase();
         const newStatus = (current === 'approved') ? 'Rejected' : 'Approved';
@@ -2410,8 +2592,10 @@ const Users = {
       });
     });
 
+    // Delete user button
     document.querySelectorAll('.delete-user-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         const userId = btn.dataset.userId;
         const email = btn.dataset.userEmail;
         if (!confirm(`Are you sure you want to permanently delete user "${email}" and all associated data?`)) {
@@ -2439,6 +2623,49 @@ const Users = {
   initEvents() {
     const refreshBtn = document.getElementById('btn-refresh-users');
     if (refreshBtn) refreshBtn.addEventListener('click', () => Users.render());
+
+    // Modal close & cancel
+    const closeBtn = document.getElementById('user-profile-modal-close');
+    if (closeBtn) closeBtn.addEventListener('click', () => Users.closeProfileModal());
+
+    const cancelBtn = document.getElementById('user-profile-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => Users.closeProfileModal());
+
+    // Save profile
+    const saveBtn = document.getElementById('user-profile-save');
+    if (saveBtn) saveBtn.addEventListener('click', () => Users.saveProfile());
+
+    // Sync score slider and number input
+    const slider = document.getElementById('modal-score-slider');
+    const number = document.getElementById('modal-score-number');
+    const display = document.getElementById('modal-score-display');
+    const updateScoreUi = (val) => {
+      const v = Math.max(0, Math.min(100, parseInt(val || '0', 10)));
+      if (slider) slider.value = v;
+      if (number) number.value = v;
+      if (display) {
+        display.textContent = v;
+        display.style.color = v >= 80 ? '#34D399' : (v >= 50 ? '#FBBF24' : '#F87171');
+      }
+    };
+    if (slider) slider.addEventListener('input', (e) => updateScoreUi(e.target.value));
+    if (number) number.addEventListener('input', (e) => updateScoreUi(e.target.value));
+
+    // Preset buttons
+    document.querySelectorAll('.btn-score-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = btn.dataset.score;
+        updateScoreUi(val);
+      });
+    });
+
+    // Close on overlay backdrop click
+    const overlay = document.getElementById('user-profile-modal-overlay');
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) Users.closeProfileModal();
+      });
+    }
 
     const purgeBtn = document.getElementById('btn-purge-users');
     if (purgeBtn) {

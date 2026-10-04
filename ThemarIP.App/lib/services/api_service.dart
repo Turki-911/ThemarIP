@@ -305,6 +305,33 @@ class ApiService {
     }
   }
 
+  // Save user's bank selection directly to themarip.db
+  Future<bool> saveUserBankSelection({
+    required String bankCode,
+    required String bankName,
+    String? userId,
+    String? email,
+  }) async {
+    try {
+      final user = await AuthService.getUser();
+      final effectiveUserId = userId ?? user?.id;
+      final effectiveEmail = email ?? user?.email;
+
+      final res = await _dio.post(
+        '/statements/user-bank-selection',
+        data: {
+          if (effectiveUserId != null && effectiveUserId.isNotEmpty) 'userId': effectiveUserId,
+          if (effectiveEmail != null && effectiveEmail.isNotEmpty) 'email': effectiveEmail,
+          'bankCode': bankCode,
+          'bankName': bankName,
+        },
+      );
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // 3. Infrastructure Health & Connectivity Check
   Future<ApiHealthResult> checkHealth() async {
     final sw = Stopwatch()..start();

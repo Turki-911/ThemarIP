@@ -311,6 +311,14 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       _selectedPdfFile = null;
       _extractorFlow = ExtractorFlowStep.connectBank;
     });
+
+    // Synchronize bank selection directly to themarip.db & Admin Portal
+    _apiService.saveUserBankSelection(
+      bankCode: bank.code,
+      bankName: bank.nameEn,
+      userId: _currentUser?.id,
+      email: _currentUser?.email,
+    );
   }
 
   Future<void> _pickPdf() async {
@@ -490,6 +498,17 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       _selectedCategoryIndex = null;
       _applyFilters();
     });
+
+    if (bankCode != 'ALL') {
+      final bankMatches = _localBanks.where((b) => b.code.toUpperCase() == bankCode.toUpperCase());
+      final bankName = bankMatches.isNotEmpty ? bankMatches.first.nameEn : bankCode;
+      _apiService.saveUserBankSelection(
+        bankCode: bankCode,
+        bankName: bankName,
+        userId: _currentUser?.id,
+        email: _currentUser?.email,
+      );
+    }
   }
 
   void _onSelectMonth(String monthKey) {

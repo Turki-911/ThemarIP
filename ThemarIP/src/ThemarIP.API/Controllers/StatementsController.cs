@@ -97,7 +97,11 @@ public class StatementsController : ControllerBase
             userBanks ??= new List<UserBankSummaryDto>();
 
             var connectedBanks = userBanks.Select(b => b.Name).ToList();
-            var primaryBank = userBanks.FirstOrDefault()?.Name ?? (!string.IsNullOrEmpty(u.AccountNumber) ? u.AccountNumber : null);
+            if (!string.IsNullOrWhiteSpace(u.AccountNumber) && !connectedBanks.Any(b => string.Equals(b, u.AccountNumber, StringComparison.OrdinalIgnoreCase)))
+            {
+                connectedBanks.Add(u.AccountNumber);
+            }
+            var primaryBank = !string.IsNullOrEmpty(u.AccountNumber) ? u.AccountNumber : userBanks.FirstOrDefault()?.Name;
             var totalTx = userBanks.Sum(b => b.TxCount);
 
             return new
@@ -204,6 +208,70 @@ public class StatementsController : ControllerBase
             return Ok(new { message = "User status updated.", status = user.AccessStatus.ToString() });
         }
         return BadRequest("Invalid access status.");
+    }
+
+    [HttpPost("user-bank-selection")]
+    public async Task<IActionResult> SaveUserBankSelection(
+        [FromBody] UserBankSelectionDto dto,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        if (dto == null) return BadRequest(new { message = "Invalid request payload." });
+
+        ThemarIP.Domain.Entities.User? user = null;
+        if (dto.UserId.HasValue && dto.UserId.Value != System.Guid.Empty)
+        {
+            user = await context.Users.FindAsync(dto.UserId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(dto.Email))
+        {
+            user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                context.Users, u => u.Email.ToLower() == dto.Email.ToLower());
+        }
+
+        if (user == null)
+        {
+            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                           ?? User?.FindFirst("sub")?.Value;
+            if (!string.IsNullOrEmpty(userIdClaim) && System.Guid.TryParse(userIdClaim, out var claimGuid))
+            {
+                user = await context.Users.FindAsync(claimGuid);
+            }
+        }
+
+        if (user == null)
+        {
+            // If still null, fallback to the latest active non-admin user
+            user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                context.Users.OrderByDescending(u => u.CreatedAt),
+                u => u.Role != ThemarIP.Domain.Enums.UserRole.Admin);
+        }
+
+        if (user == null)
+        {
+            return NotFound(new { message = "User not found to associate bank selection." });
+        }
+
+        string bankDisplayName = !string.IsNullOrWhiteSpace(dto.BankName) ? dto.BankName.Trim() : (dto.BankCode ?? "Unknown Bank");
+        user.AccountNumber = bankDisplayName;
+
+        // If trust score is 0, give initial baseline score of 75 upon bank connection
+        if (user.TrustScore == 0)
+        {
+            user.TrustScore = 75;
+        }
+
+        await context.SaveChangesAsync(default);
+
+        return Ok(new
+        {
+            success = true,
+            message = "Bank selection linked to themarip.db successfully.",
+            userId = user.Id,
+            fullName = user.FullName,
+            email = user.Email,
+            selectedBank = user.AccountNumber,
+            trustScore = user.TrustScore
+        });
     }
 
     [HttpDelete("users/{id}")]
@@ -923,4 +991,13 @@ public class UpdateScoreDto
 {
     public int TrustScore { get; set; }
 }
+
+public class UserBankSelectionDto
+{
+    public System.Guid? UserId { get; set; }
+    public string? Email { get; set; }
+    public string? BankCode { get; set; }
+    public string? BankName { get; set; }
+}
+
 

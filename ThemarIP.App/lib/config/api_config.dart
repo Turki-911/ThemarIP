@@ -5,7 +5,7 @@ class ApiConfig {
   // Default Mac LAN IP address (detected on current Wi-Fi)
   static const String defaultLanHost = '192.168.0.201';
   static const String livePublicApiUrl =
-      'https://public-applications-hartford-title.trycloudflare.com/api';
+      'https://slideshow-cup-stanford-mileage.trycloudflare.com/api';
   static String? _customHost;
 
   static const String _prefKeyHost = 'themarip_custom_api_host';

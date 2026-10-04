@@ -6,9 +6,16 @@
 'use strict';
 
 // Dynamic API Base URL for local & production tunnel hosting
-const THEMAR_API_BASE = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-  ? (window.location.origin + '/api')
-  : 'http://localhost:5267/api';
+const THEMAR_API_BASE = (() => {
+  if (typeof window === 'undefined') return 'http://localhost:5267/api';
+  if (window.location.pathname.startsWith('/admin')) {
+    return window.location.origin + '/api';
+  }
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:5267/api';
+  }
+  return 'https://slideshow-cup-stanford-mileage.trycloudflare.com/api';
+})();
 
 
 // Pre-SEED merchant name lookup (avoids circular reference inside IIFE)
@@ -1270,13 +1277,13 @@ const Categories = {
       btn.addEventListener('click', async ()=>{
         const catId = btn.dataset.catId;
         const cat = state.categories.find(c=>c.id===catId);
-        if (cat && confirm(`Are you sure you want to delete category "${cat.name}"?`)) {
+        if (cat && confirm(`Are you sure you want to delete category "${cat.name}" from themarip.db?`)) {
           try {
             const res = await fetch(`${THEMAR_API_BASE}/statements/categories/${catId}`, { method: 'DELETE' });
             if (res.ok) {
               await loadCategoryRulesFromDb();
               Categories.render();
-              Toast.success(`Category "${cat.name}" deleted.`);
+              Toast.success(`Category "${cat.name}" deleted from themarip.db.`);
             }
           } catch(e) { console.error(e); }
         }
@@ -1286,13 +1293,13 @@ const Categories = {
       btn.addEventListener('click', async ()=>{
         const subId = btn.dataset.subcatId;
         const sub = state.subcategories.find(s=>s.id===subId);
-        if (sub && confirm(`Are you sure you want to delete subcategory "${sub.name}"?`)) {
+        if (sub && confirm(`Are you sure you want to delete subcategory "${sub.name}" from themarip.db?`)) {
           try {
             const res = await fetch(`${THEMAR_API_BASE}/statements/categories/${subId}`, { method: 'DELETE' });
             if (res.ok) {
               await loadCategoryRulesFromDb();
               Categories.render();
-              Toast.success(`Subcategory "${sub.name}" deleted.`);
+              Toast.success(`Subcategory "${sub.name}" deleted from themarip.db.`);
             }
           } catch(e) { console.error(e); }
         }
@@ -1335,7 +1342,7 @@ const Categories = {
           });
           if (res.ok) {
             await loadCategoryRulesFromDb();
-            Toast.success(`Subcategory "${name}" created successfully.`);
+            Toast.success(`Subcategory "${name}" created and saved to themarip.db.`);
           }
         } catch(e) {
           console.error(e);
@@ -1357,7 +1364,7 @@ const Categories = {
           });
           if (res.ok) {
             await loadCategoryRulesFromDb();
-            Toast.success(`Category "${name}" created successfully.`);
+            Toast.success(`Category "${name}" created and saved to themarip.db.`);
           }
         } catch(e) {
           console.error(e);
@@ -1670,10 +1677,10 @@ const Merchants = {
             const data = await res.json();
             m.status = data.status || nextStatus;
             AuditLog.record('TOGGLE','Merchant',`${m.status==='active'?'Activated':'Deactivated'} merchant: ${m.name}`);
-            Toast.success(`Merchant ${m.name} is now ${m.status}.`);
+            Toast.success(`Merchant ${m.name} is now ${m.status}. Saved to themarip.db.`);
             Merchants._renderTable();
           } else {
-            Toast.error('Failed to toggle merchant status.');
+            Toast.error('Failed to toggle merchant status in database.');
           }
         } catch (e) {
           m.status = nextStatus;
@@ -1766,7 +1773,7 @@ const Merchants = {
           Object.assign(m, { name, mcc, defaultCategoryId:categoryId, defaultSubcategoryId:subcategoryId, defaultConfidence:confidence, status, aliases });
         }
         AuditLog.record('UPDATE','Merchant',`Updated merchant: ${name}`);
-        Toast.success(`Merchant "${name}" updated successfully.`);
+        Toast.success(`Merchant "${name}" updated and saved to themarip.db!`);
       } else {
         // New merchant or client-only mock
         const res = await fetch(THEMAR_API_BASE + '/statements/merchants', {
@@ -1792,10 +1799,10 @@ const Merchants = {
         };
         state.merchants.unshift(newM);
         AuditLog.record('CREATE','Merchant',`Created merchant: ${name}`);
-        Toast.success(`Merchant "${name}" created successfully.`);
+        Toast.success(`Merchant "${name}" created and saved to themarip.db!`);
       }
     } catch (err) {
-      console.error('Failed to save merchant:', err);
+      console.error('Failed to save merchant to themarip.db:', err);
       // Fallback local memory update
       if (id) {
         const m = state.merchants.find(m=>m.id===id);

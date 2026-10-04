@@ -6,9 +6,16 @@
 'use strict';
 
 // Dynamic API Base URL for local & production tunnel hosting
-const THEMAR_API_BASE = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-  ? (window.location.origin + '/api')
-  : 'http://localhost:5267/api';
+const THEMAR_API_BASE = (() => {
+  if (typeof window === 'undefined') return 'http://localhost:5267/api';
+  if (window.location.pathname.startsWith('/admin')) {
+    return window.location.origin + '/api';
+  }
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:5267/api';
+  }
+  return 'https://slideshow-cup-stanford-mileage.trycloudflare.com/api';
+})();
 
 
 // Pre-SEED merchant name lookup (avoids circular reference inside IIFE)

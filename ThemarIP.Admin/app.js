@@ -14,7 +14,7 @@ const THEMAR_API_BASE = (() => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:5267/api';
   }
-  return 'https://correction-josh-fundamental-important.trycloudflare.com/api';
+  return 'https://definitions-expertise-craft-pics.trycloudflare.com/api';
 })();
 
 

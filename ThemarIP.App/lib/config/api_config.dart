@@ -3,9 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
   // Default Mac LAN IP address (detected on current Wi-Fi)
-  static const String defaultLanHost = '192.168.0.201';
+  static const String defaultLanHost = '172.20.10.5';
   static const String livePublicApiUrl =
-      'https://slideshow-cup-stanford-mileage.trycloudflare.com/api';
+      'https://definitions-expertise-craft-pics.trycloudflare.com/api';
   static String? _customHost;
 
   static const String _prefKeyHost = 'themarip_custom_api_host';
@@ -26,7 +26,11 @@ class ApiConfig {
         // Purge old expired quick tunnels or old hotspot IP
         if (val.contains('then-eyes-comm-dicke') ||
             val.contains('brick-concerned') ||
-            val == '172.20.10.5') {
+            val.contains('slideshow-cup-stanford') ||
+            val.contains('sofa-renew-shaw') ||
+            val.contains('neural-proven-festivals') ||
+            val.contains('correction-josh') ||
+            val == '192.168.0.201') {
           await prefs.remove(_prefKeyHost);
           _customHost = null;
         } else {

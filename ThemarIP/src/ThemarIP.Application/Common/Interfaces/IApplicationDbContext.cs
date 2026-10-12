@@ -31,6 +31,9 @@ public interface IApplicationDbContext
     DbSet<ThemarIP.Domain.Entities.Pfm.PfmIntelligenceAlert> PfmIntelligenceAlerts { get; }
     DbSet<ThemarIP.Domain.Entities.Pfm.PfmUserCorrection> PfmUserCorrections { get; }
     DbSet<ThemarIP.Domain.Entities.Pfm.PfmAuditLog> PfmAuditLogs { get; }
+    DbSet<ThemarIP.Domain.Entities.Sms.BankSmsRule> BankSmsRules { get; }
+    DbSet<ThemarIP.Domain.Entities.Sms.BankSmsRuleVersion> BankSmsRuleVersions { get; }
+    DbSet<ThemarIP.Domain.Entities.Sms.SmsProcessingLog> SmsProcessingLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

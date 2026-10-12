@@ -5,7 +5,7 @@ class ApiConfig {
   // Default Mac LAN IP address (detected on current Wi-Fi)
   static const String defaultLanHost = '172.20.10.5';
   static const String livePublicApiUrl =
-      'https://definitions-expertise-craft-pics.trycloudflare.com/api';
+      'https://upgrades-andrews-neutral-psychology.trycloudflare.com/api';
   static String? _customHost;
 
   static const String _prefKeyHost = 'themarip_custom_api_host';
@@ -23,14 +23,25 @@ class ApiConfig {
       final saved = prefs.getString(_prefKeyHost);
       if (saved != null && saved.trim().isNotEmpty) {
         final val = saved.trim();
-        // Purge old expired quick tunnels or old hotspot IP
-        if (val.contains('then-eyes-comm-dicke') ||
+        // Purge ANY trycloudflare domain that doesn't match the current active tunnel
+        if (val.contains('trycloudflare.com') && !val.contains('upgrades-andrews-neutral-psychology')) {
+          await prefs.remove(_prefKeyHost);
+          _customHost = null;
+        } else if (val.contains('housing-janet-que-coordinated') ||
+            val.contains('meal-graduated-cia-escape') ||
+            val.contains('opened-earned-advisor-load') ||
+            val.contains('then-eyes-comm-dicke') ||
             val.contains('brick-concerned') ||
             val.contains('slideshow-cup-stanford') ||
             val.contains('sofa-renew-shaw') ||
             val.contains('neural-proven-festivals') ||
             val.contains('correction-josh') ||
-            val == '192.168.0.201') {
+            val.contains('definitions-expertise-craft-pics') ||
+            val.contains('throwing-fighters-patch-immigration') ||
+            val.contains('showers-johnson-bits-describes') ||
+            val.contains('alot-adapters-acid-freelance') ||
+            val == '192.168.0.201' ||
+            val == '172.20.10.5') {
           await prefs.remove(_prefKeyHost);
           _customHost = null;
         } else {

@@ -14,7 +14,7 @@ const THEMAR_API_BASE = (() => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:5267/api';
   }
-  return 'https://definitions-expertise-craft-pics.trycloudflare.com/api';
+  return 'https://upgrades-andrews-neutral-psychology.trycloudflare.com/api';
 })();
 
 
@@ -954,6 +954,7 @@ const Nav = {
       'view-corrections':  Corrections.render,
       'view-intelligence': Intelligence.render,
       'view-users':        Users.render,
+      'view-sms-config':   () => SmsConfig.render(),
       'view-settings':     Settings.render,
     };
     if (renders[viewId]) renders[viewId]();
@@ -2992,6 +2993,7 @@ const App = {
         'view-corrections': Corrections.render,
         'view-intelligence': Intelligence.render,
         'view-users': Users.render,
+        'view-sms-config': () => SmsConfig.render(),
         'view-settings': Settings.render,
       };
       if (renders[view]) renders[view]();

@@ -57,17 +57,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     Row(
                       children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            gradient: AppTheme.primaryGradient,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.credit_card_rounded,
-                            color: Colors.white,
-                            size: 22,
+                        SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Image.asset(
+                            'assets/themarip_logo_transparent.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const Icon(
+                              Icons.auto_awesome_rounded,
+                              color: AppTheme.primaryPurple,
+                              size: 24,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),

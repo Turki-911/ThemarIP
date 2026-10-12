@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="themarip_logo.png">
 </head>
 <body class="dark-theme">
 
@@ -19,7 +20,7 @@
 <div id="login-overlay" class="login-overlay">
   <div class="login-card">
     <div class="brand-logo">
-      <div class="logo-icon"><i data-lucide="shield-check"></i></div>
+      <div class="logo-icon" style="background: transparent; border: none; padding: 0;"><img src="themarip_logo.png" alt="ThemarIP Logo" style="width: 52px; height: 52px; border-radius: 12px; object-fit: contain; box-shadow: 0 0 16px rgba(168, 85, 247, 0.4);"></div>
       <h2>Themar<span>IP</span> Admin</h2>
     </div>
     <p class="login-subtitle">PFM Categorization & Intelligence Portal. Sign in with administrator credentials.</p>
@@ -59,7 +60,7 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="brand">
-        <div class="logo-box"><i data-lucide="brain-circuit"></i></div>
+        <div class="logo-box" style="background: transparent; border: none; padding: 0;"><img src="themarip_logo.png" alt="ThemarIP Logo" style="width: 36px; height: 36px; border-radius: 8px; object-fit: contain; box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);"></div>
         <div class="brand-text">
           <h3>Themar<span>IP</span></h3>
           <span class="badge-admin">PFM ADMIN</span>
@@ -110,6 +111,9 @@
       <a href="#" class="nav-item" data-view="view-users">
         <i data-lucide="users"></i><span>Users</span>
         <span class="count-badge" id="nav-users-count">0</span>
+      </a>
+      <a href="#" class="nav-item" data-view="view-sms-config">
+        <i data-lucide="message-square-text"></i><span>Bank SMS Configuration</span>
       </a>
       <a href="#" class="nav-item" data-view="view-settings">
         <i data-lucide="settings"></i><span>Settings</span>
@@ -697,6 +701,59 @@
     <!-- =========================================================== -->
     <!-- VIEW 9: SETTINGS                                             -->
     <!-- =========================================================== -->
+    <section id="view-sms-config" class="content-view hidden">
+      <div class="view-header">
+        <div>
+          <h2 class="section-title">Bank SMS Configuration</h2>
+          <p class="section-subtitle">Parsing rules for bank transaction SMS. A format change only needs a rule edit here — no app release or code deployment.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-add-sms-rule">
+          <i data-lucide="plus"></i> New Bank Rule
+        </button>
+      </div>
+      <div class="table-container-card">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Bank</th>
+                <th>Sender IDs</th>
+                <th style="text-align:center;">Version</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-sms-rules"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="view-header" style="margin-top:28px;">
+        <div>
+          <h2 class="section-title" style="font-size:16px;">Processing Log</h2>
+          <p class="section-subtitle">Latest SMS received from devices and what happened to each.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-refresh-sms-log"><i data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div class="table-container-card">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Sender</th>
+                <th>Status</th>
+                <th>Details</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-sms-log"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section id="view-settings" class="content-view hidden">
       <div style="max-width:820px;">
         <div class="table-container-card" style="padding:24px;margin-bottom:20px;">
@@ -1092,6 +1149,92 @@
 </div>
 
 <!-- ============================================================ -->
+<!-- BANK SMS RULE MODAL                                          -->
+<!-- ============================================================ -->
+<div id="sms-modal-overlay" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 class="modal-title" id="sms-modal-title">New Bank SMS Rule</h2>
+      <button class="drawer-close-btn" id="sms-modal-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+      <input type="hidden" id="sms-form-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Bank *</label>
+          <input type="text" id="sms-form-bank" class="form-control" placeholder="e.g. Bank Muscat">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Bank code</label>
+          <input type="text" id="sms-form-bankcode" class="form-control" placeholder="auto (BANK_MUSCAT)">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Status</label>
+          <select id="sms-form-active" class="form-control">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sender IDs * <span style="color:var(--text-dim);font-weight:400;">(comma separated, as shown on the phone)</span></label>
+        <input type="text" id="sms-form-senders" class="form-control" placeholder="BankMuscat, BM-ALERT">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sample message</label>
+        <textarea id="sms-form-sample" class="form-control" rows="2" placeholder="Your account was debited OMR 12.500 at Store ABC. Ref: 847291."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Message pattern (regex with named groups) *</label>
+        <textarea id="sms-form-pattern" class="form-control" rows="3" style="font-family:monospace;font-size:12px;" placeholder="debited\s+(?&lt;currency&gt;[A-Z]{3})\s*(?&lt;amount&gt;[\d.,]+)\s+at\s+(?&lt;merchant&gt;.+?)\.\s*Ref:\s*(?&lt;ref&gt;\w+)"></textarea>
+      </div>
+
+      <div style="margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Field mappings <span style="font-weight:400;text-transform:none;">— name of the regex group that holds each value</span></div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;"><label class="form-label">Amount *</label><input type="text" id="sms-map-amount" class="form-control" style="font-family:monospace;" placeholder="amount"></div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Transaction type</label><input type="text" id="sms-map-type" class="form-control" style="font-family:monospace;" placeholder="type"></div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Merchant</label><input type="text" id="sms-map-merchant" class="form-control" style="font-family:monospace;" placeholder="merchant"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;"><label class="form-label">Reference</label><input type="text" id="sms-map-reference" class="form-control" style="font-family:monospace;" placeholder="ref"></div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Date</label><input type="text" id="sms-map-date" class="form-control" style="font-family:monospace;" placeholder="date"></div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Balance</label><input type="text" id="sms-map-balance" class="form-control" style="font-family:monospace;" placeholder="balance"></div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Currency</label><input type="text" id="sms-map-currency" class="form-control" style="font-family:monospace;" placeholder="currency"></div>
+      </div>
+
+      <div style="margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Transaction type &amp; formats</div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;"><label class="form-label">Debit keywords</label><input type="text" id="sms-form-debit" class="form-control" value="debited,withdrawn,purchase,spent,paid"></div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Credit keywords</label><input type="text" id="sms-form-credit" class="form-control" value="credited,received,deposit,refund"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Fallback type</label>
+          <select id="sms-form-deftype" class="form-control">
+            <option value="">None (fail validation)</option>
+            <option value="DEBIT">Debit</option>
+            <option value="CREDIT">Credit</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Default currency</label><input type="text" id="sms-form-currency" class="form-control" value="OMR"></div>
+        <div class="form-group" style="flex:2;"><label class="form-label">Date formats <span style="color:var(--text-dim);font-weight:400;">(optional, | separated)</span></label><input type="text" id="sms-form-datefmt" class="form-control" placeholder="dd/MM/yyyy HH:mm|dd-MMM-yyyy"></div>
+      </div>
+
+      <div style="margin-top:16px;display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-secondary btn-sm" id="sms-btn-test"><i data-lucide="flask-conical"></i> Test against a message</button>
+        <span style="font-size:12px;color:var(--text-dim);">Uses the sample message above — paste a new SMS there to test an updated format.</span>
+      </div>
+      <div id="sms-test-result" style="margin-top:12px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="sms-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="sms-modal-save"><i data-lucide="save"></i> Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+
 <!-- CONFIRM DIALOG                                               -->
 <!-- ============================================================ -->
 <div id="confirm-overlay" class="modal-overlay hidden">
@@ -1115,5 +1258,6 @@
 <div id="toast-container" class="toast-container"></div>
 
 <script src="app.js"></script>
+<script src="sms-config.js"></script>
 </body>
 </html>

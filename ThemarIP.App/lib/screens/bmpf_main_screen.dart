@@ -7,6 +7,7 @@ import '../models/bmpf_models.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/sms_service.dart';
 
 class LocalBank {
   final String code;
@@ -219,6 +220,10 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     _selectedPageIndex = widget.initialPageIndex;
     _loadUser();
     _fetchLiveDbCount();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (mounted) SmsService.start(context);
+    });
     _fetchCategoryHierarchy().then((_) {
       if (mounted && !_hasUploadedStatement) {
         setState(() {
@@ -653,44 +658,19 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       titleSpacing: 16,
       title: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.4), width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF34D399).withValues(alpha: 0.15),
-                  blurRadius: 6,
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(5),
-              child: Image.asset(
-                'assets/themarip_logo.png',
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Icon(Icons.spa_rounded, size: 16, color: Color(0xFF34D399)),
-              ),
+          SizedBox(
+            width: 46,
+            height: 46,
+            child: Image.asset(
+              'assets/themarip_logo_transparent.png',
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Icon(Icons.auto_awesome_rounded, size: 24, color: Color(0xFFA855F7)),
             ),
           ),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text(
-                'THEMAR PFM',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
-              ),
-              Text(
-                'CENTRAL BANK OF OMAN REGULATED',
-                style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF34D399), letterSpacing: 0.8),
-              ),
-            ],
+          const Text(
+            'THEMAR PFM',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5),
           ),
         ],
       ),
@@ -1481,40 +1461,42 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                 Positioned(
                   bottom: 0,
                   right: 10,
-                  child: Container(
+                  child: SizedBox(
                     width: 94,
                     height: 94,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.6), width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF34D399).withValues(alpha: 0.25),
-                          blurRadius: 18,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.asset(
-                            'assets/themarip_logo.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => const Center(
-                              child: Icon(Icons.spa_rounded, size: 30, color: Color(0xFF34D399)),
-                            ),
+                    child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              const Color(0xFFA855F7).withValues(alpha: 0.35),
+                              const Color(0xFF06B6D4).withValues(alpha: 0.15),
+                              Colors.transparent,
+                            ],
                           ),
                         ),
                       ),
-                    ),
+                      SizedBox(
+                        width: 76,
+                        height: 76,
+                        child: Image.asset(
+                          'assets/themarip_logo_transparent.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Center(
+                            child: Icon(Icons.auto_awesome_rounded, size: 36, color: Color(0xFFA855F7)),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
+            ],
             ),
           ),
         ),

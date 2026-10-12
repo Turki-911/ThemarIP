@@ -267,105 +267,38 @@ class _SplashScreenState extends State<SplashScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Brand Shield / Emblem with Pulse Animation
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Outer Pulsing Glow Ring
-                        Container(
-                          width: 130,
-                          height: 130,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppTheme.primaryPurple.withValues(alpha: 0.2),
-                              width: 2,
-                            ),
-                          ),
+                    // 4-D Floating Hologram Bear with Smooth Edges & No Background
+                    SizedBox(
+                      width: 240,
+                      height: 240,
+                      child: Image.asset(
+                        'assets/themarip_logo_transparent.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 110,
+                          color: Color(0xFFA855F7),
+                        ),
+                      ),
+                    )
+                        .animate(onPlay: (c) => c.repeat(reverse: true))
+                        .moveY(
+                          begin: -10,
+                          end: 10,
+                          duration: 2400.ms,
+                          curve: Curves.easeInOut,
                         )
-                            .animate(onPlay: (c) => c.repeat(reverse: true))
-                            .scale(
-                              begin: const Offset(0.9, 0.9),
-                              end: const Offset(1.15, 1.15),
-                              duration: 1800.ms,
-                              curve: Curves.easeInOut,
-                            )
-                            .fadeIn(duration: 800.ms),
-
-                        // Middle Glow Ring
-                        Container(
-                          width: 110,
-                          height: 110,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppTheme.neonPink.withValues(alpha: 0.35),
-                              width: 1.5,
-                            ),
-                          ),
+                        .scale(
+                          begin: const Offset(0.97, 0.97),
+                          end: const Offset(1.03, 1.03),
+                          duration: 2400.ms,
+                          curve: Curves.easeInOut,
                         )
-                            .animate(onPlay: (c) => c.repeat(reverse: true))
-                            .scale(
-                              begin: const Offset(1.05, 1.05),
-                              end: const Offset(0.95, 0.95),
-                              duration: 2200.ms,
-                              curve: Curves.easeInOut,
-                            ),
-
-                        // Core Logo Box (Glassmorphic)
-                        Container(
-                          width: 86,
-                          height: 86,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(26),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.electricViolet.withValues(alpha: 0.45),
-                                blurRadius: 36,
-                                spreadRadius: 6,
-                              ),
-                              BoxShadow(
-                                color: AppTheme.neonPink.withValues(alpha: 0.3),
-                                blurRadius: 20,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: SizedBox(
-                              width: 48,
-                              height: 48,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: Image.asset(
-                                  'assets/themarip_logo.png',
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, _, _) => const Icon(
-                                    Icons.spa_rounded,
-                                    size: 36,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                            .animate()
-                            .scale(
-                              duration: 900.ms,
-                              curve: Curves.easeOutBack,
-                            )
-                            .shimmer(
-                              delay: 900.ms,
-                              duration: 1800.ms,
-                              color: Colors.white24,
-                            ),
-                      ],
-                    ),
+                        .shimmer(
+                          delay: 800.ms,
+                          duration: 2200.ms,
+                          color: Colors.white24,
+                        ),
                     const SizedBox(height: 32),
 
                     // App Title & Typography

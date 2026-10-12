@@ -20,6 +20,12 @@ using ThemarIP.Infrastructure.Services.Statements;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var portEnv = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(portEnv))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{portEnv}");
+}
+
 // 1. Add CORS Support
 builder.Services.AddCors(options =>
 {
@@ -69,6 +75,7 @@ builder.Services.AddScoped<IBankMuscatPdfParser, BankMuscatPdfParser>();
 builder.Services.AddScoped<IStatementExtractionService, StatementExtractionService>();
 builder.Services.AddScoped<IBankNotificationParserService, BankNotificationParserService>();
 builder.Services.AddScoped<IMailboxPullerService, MailboxPullerService>();
+builder.Services.AddScoped<ThemarIP.Application.DTOs.Sms.ISmsProcessingService, ThemarIP.Infrastructure.Services.Sms.SmsProcessingService>();
 
 // 4b. Add NBO API Service
 builder.Services.AddHttpClient("NboApi", client =>

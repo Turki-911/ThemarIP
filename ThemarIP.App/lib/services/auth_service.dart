@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
+import 'sms_service.dart';
 
 class AuthService {
   static const String _tokenKey = 'themarip_user_token';
@@ -32,5 +33,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
+    await prefs.remove(SmsService.askedKey);
+    await SmsService.clear();
   }
 }

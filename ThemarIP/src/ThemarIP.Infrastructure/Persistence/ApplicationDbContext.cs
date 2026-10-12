@@ -42,6 +42,11 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PfmIntelligenceAlert> PfmIntelligenceAlerts => Set<PfmIntelligenceAlert>();
     public DbSet<PfmAuditLog> PfmAuditLogs => Set<PfmAuditLog>();
 
+    // ── Bank SMS auto-detection (additive) ───────────────────
+    public DbSet<ThemarIP.Domain.Entities.Sms.BankSmsRule> BankSmsRules => Set<ThemarIP.Domain.Entities.Sms.BankSmsRule>();
+    public DbSet<ThemarIP.Domain.Entities.Sms.BankSmsRuleVersion> BankSmsRuleVersions => Set<ThemarIP.Domain.Entities.Sms.BankSmsRuleVersion>();
+    public DbSet<ThemarIP.Domain.Entities.Sms.SmsProcessingLog> SmsProcessingLogs => Set<ThemarIP.Domain.Entities.Sms.SmsProcessingLog>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         base.ConfigureConventions(configurationBuilder);

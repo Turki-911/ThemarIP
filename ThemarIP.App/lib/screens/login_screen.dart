@@ -91,56 +91,28 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Center(
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFF34D399).withValues(alpha: 0.5), width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF34D399).withValues(alpha: 0.25),
-                          blurRadius: 14,
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.asset(
-                            'assets/themarip_logo.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => const Icon(
-                              Icons.spa_rounded,
-                              size: 28,
-                              color: Color(0xFF34D399),
-                            ),
-                          ),
-                        ),
+                  child: SizedBox(
+                    width: 180,
+                    height: 180,
+                    child: Image.asset(
+                      'assets/themarip_logo_transparent.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 72,
+                        color: Color(0xFFA855F7),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 const Center(
                   child: Text(
                     'Welcome Back ✨',
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Center(
-                  child: Text(
-                    'Sign in to manage your financial statements & analytics.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppTheme.textMuted, fontSize: 14),
-                  ),
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
                 if (_errorMessage != null) ...[
                   Container(
                     padding: const EdgeInsets.all(12),

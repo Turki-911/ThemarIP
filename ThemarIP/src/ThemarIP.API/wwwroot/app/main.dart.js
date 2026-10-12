@@ -94615,7 +94615,7 @@ n=A.bM(A.b([B.a_X,B.bB,p,B.jc,B.a0b,B.mz,A.aIR(A.b([o,A.a0v(B.aE.aD(0.2),n,B.Zd,
 return A.aEp(A.b([A.kq(B.a0J,new A.awf(a),s),A.zH(B.a_Q,new A.awg(this.a,a,q),A.l5(s,s,B.aE,s,s,s,s,s,s,s,s,s,s,s,new A.bR(A.at(12),B.r),s,s,s,s,s))],m),B.EO,n,new A.bR(r,B.hi),B.Sh)},
 $S:235}
 A.awb.prototype={
-$0(){var s="https://upgrades-andrews-neutral-psychology.trycloudflare.com/api"
+$0(){var s="https://themarip.up.railway.app/api"
 this.a.scB(s)
 return s},
 $S:0}

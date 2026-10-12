@@ -14,7 +14,7 @@ const THEMAR_API_BASE = (() => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:5267/api';
   }
-  return 'https://upgrades-andrews-neutral-psychology.trycloudflare.com/api';
+  return 'https://themarip.up.railway.app/api';
 })();
 
 

@@ -23,4 +23,8 @@
     <ProjectReference Include="..\ThemarIP.Infrastructure\ThemarIP.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="themarip.db" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+
 </Project>

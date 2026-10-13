@@ -13,6 +13,7 @@ RUN dotnet publish src/ThemarIP.API/ThemarIP.API.csproj -c Release -o /out
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /out .
+COPY src/ThemarIP.API/themarip.db ./themarip.db
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 ENTRYPOINT ["dotnet", "ThemarIP.API.dll"]

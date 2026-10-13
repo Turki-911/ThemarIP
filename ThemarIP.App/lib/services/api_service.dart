@@ -334,6 +334,7 @@ class ApiService {
 
   // 3. Infrastructure Health & Connectivity Check
   Future<ApiHealthResult> checkHealth() async {
+    _dio.options.baseUrl = ApiConfig.baseUrl;
     final sw = Stopwatch()..start();
     final healthUrl = ApiConfig.health;
     try {

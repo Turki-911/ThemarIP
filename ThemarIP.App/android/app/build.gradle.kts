@@ -37,6 +37,8 @@ android {
                 keyPassword = props.getProperty("keyPassword")
                 storeFile = file(props.getProperty("storeFile"))
                 storePassword = props.getProperty("storePassword")
+                enableV1Signing = true
+                enableV2Signing = true
             }
         }
     }

@@ -82,12 +82,20 @@ const SmsConfig = {
       <td style="font-size:12px;color:var(--text-muted);">${SmsConfig.esc(l.details)}</td>
       <td style="font-size:12px;max-width:340px;" class="truncate" title="${SmsConfig.esc(l.rawMessage)}">${SmsConfig.esc(l.rawMessage)}</td>
       <td>
-        <button class="btn btn-xs btn-secondary" data-sms-test-idx="${idx}" title="Test or edit rule with this SMS message">
-          <i data-lucide="flask-conical" style="width:12px;margin-right:3px;"></i> Test
-        </button>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-xs btn-primary" data-sms-reprocess-id="${l.id}" title="Re-process this message against active rules">
+            <i data-lucide="rotate-cw" style="width:12px;margin-right:2px;"></i> Re-process
+          </button>
+          <button class="btn btn-xs btn-secondary" data-sms-test-idx="${idx}" title="Test or edit rule with this SMS message">
+            <i data-lucide="flask-conical" style="width:12px;margin-right:2px;"></i> Test
+          </button>
+        </div>
       </td>
     </tr>`).join('');
     refreshIcons();
+    tbody.querySelectorAll('[data-sms-reprocess-id]').forEach(b => {
+      b.addEventListener('click', () => SmsConfig.reprocessLogs(b.dataset.smsReprocessId));
+    });
     tbody.querySelectorAll('[data-sms-test-idx]').forEach(b => {
       b.addEventListener('click', () => {
         const row = rows[parseInt(b.dataset.smsTestIdx, 10)];
@@ -95,6 +103,29 @@ const SmsConfig = {
         SmsConfig.openModalForMessage(row.sender, row.rawMessage);
       });
     });
+  },
+
+  async reprocessLogs(logId = null) {
+    const btn = document.getElementById('btn-reprocess-sms-log');
+    if (btn) btn.disabled = true;
+    Toast.info(logId ? 'Re-processing message…' : 'Re-processing un-saved SMS logs…');
+    try {
+      const url = '/admin/sms-rules/logs/reprocess' + (logId ? `?logId=${logId}` : '');
+      const res = await SmsConfig.api(url, { method: 'POST' });
+      if (res.saved > 0) {
+        Toast.success(`Successfully saved ${res.saved} transaction${res.saved > 1 ? 's' : ''} from SMS logs!`);
+        if (typeof loadRealTransactions === 'function') loadRealTransactions();
+      } else if (res.noMatch > 0) {
+        Toast.warning(`${res.noMatch} message${res.noMatch > 1 ? 's' : ''} still had no matching active rule.`);
+      } else {
+        Toast.info(`Re-process finished: ${res.total} evaluated, ${res.saved} saved.`);
+      }
+      await SmsConfig.loadLog();
+    } catch (e) {
+      Toast.error('Re-processing failed: ' + e.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   },
 
   openModalForMessage(sender, message) {
@@ -225,6 +256,7 @@ const SmsConfig = {
     const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
     on('btn-add-sms-rule', () => SmsConfig.openModal(null));
     on('btn-refresh-sms-log', () => SmsConfig.loadLog());
+    on('btn-reprocess-sms-log', () => SmsConfig.reprocessLogs());
     on('sms-modal-close', SmsConfig.closeModal);
     on('sms-modal-cancel', SmsConfig.closeModal);
     on('sms-modal-save', SmsConfig.save);

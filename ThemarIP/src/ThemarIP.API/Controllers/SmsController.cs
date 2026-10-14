@@ -67,4 +67,8 @@ public class AdminSmsRulesController : ControllerBase
 
     [HttpGet("logs")]
     public async Task<IActionResult> Logs([FromQuery] int take = 100) => Ok(await _sms.GetLogsAsync(take));
+
+    [HttpPost("logs/reprocess")]
+    public async Task<IActionResult> Reprocess([FromQuery] Guid? logId = null) =>
+        Ok(await _sms.ReprocessLogsAsync(logId));
 }

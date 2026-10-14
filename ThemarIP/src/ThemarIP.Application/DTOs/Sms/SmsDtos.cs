@@ -82,6 +82,16 @@ public class SmsLogDto
     public DateTimeOffset CreatedAt { get; set; }
 }
 
+public class SmsReprocessResultDto
+{
+    public int Total { get; set; }
+    public int Saved { get; set; }
+    public int Skipped { get; set; }
+    public int NoMatch { get; set; }
+    public int Errors { get; set; }
+    public List<string> Details { get; set; } = new();
+}
+
 public interface ISmsProcessingService
 {
     Task<SmsIngestResultDto> IngestAsync(Guid userId, SmsIngestRequestDto request);
@@ -92,4 +102,5 @@ public interface ISmsProcessingService
     Task<bool> SetActiveAsync(Guid id, bool active, string? changedBy);
     Task<bool> DeleteRuleAsync(Guid id);
     Task<List<SmsLogDto>> GetLogsAsync(int take);
+    Task<SmsReprocessResultDto> ReprocessLogsAsync(Guid? logId = null);
 }

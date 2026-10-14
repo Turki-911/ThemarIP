@@ -276,6 +276,132 @@ public class SmsProcessingService : ISmsProcessingService
         }).ToList();
     }
 
+    public async Task<SmsReprocessResultDto> ReprocessLogsAsync(Guid? logId = null)
+    {
+        var result = new SmsReprocessResultDto();
+        var query = _db.SmsProcessingLogs.AsQueryable();
+        if (logId.HasValue)
+        {
+            query = query.Where(l => l.Id == logId.Value);
+        }
+        else
+        {
+            query = query.Where(l => l.Status != "Saved");
+        }
+
+        var logs = await query.OrderBy(l => l.ReceivedAt).ToListAsync();
+        result.Total = logs.Count;
+
+        var allRules = await _db.BankSmsRules.Where(r => r.IsActive).ToListAsync();
+
+        foreach (var entry in logs)
+        {
+            try
+            {
+                var sender = (entry.Sender ?? string.Empty).Trim();
+                var message = SmsParsingEngine.Normalize(entry.RawMessage);
+                var received = entry.ReceivedAt;
+
+                var rules = allRules
+                    .Where(r => SenderMatches(r.SenderIds, sender))
+                    .OrderByDescending(r => r.UpdatedAt)
+                    .ToList();
+
+                if (rules.Count == 0)
+                {
+                    entry.Status = "NoRule";
+                    entry.Details = $"No active rule for sender '{sender}'.";
+                    result.Skipped++;
+                    continue;
+                }
+
+                BankSmsRule? used = null;
+                SmsRuleTestResultDto? parsed = null;
+                foreach (var r in rules)
+                {
+                    var res = SmsParsingEngine.Run(ToDto(r), message, received);
+                    if (res.Matched) { used = r; parsed = res; break; }
+                }
+
+                if (used == null || parsed?.Extracted == null)
+                {
+                    entry.Status = "NoMatch";
+                    entry.Details = "Message did not match any active rule for this sender.";
+                    result.NoMatch++;
+                    continue;
+                }
+
+                var ex = parsed.Extracted;
+                var invalid = SmsParsingEngine.Validate(ex);
+                if (invalid != null)
+                {
+                    entry.Status = "ValidationFailed";
+                    entry.Details = invalid;
+                    result.Errors++;
+                    continue;
+                }
+
+                entry.RuleId = used.Id;
+                entry.RuleVersion = used.Version;
+                entry.ExtractedJson = JsonSerializer.Serialize(ex, Json);
+                entry.Reference = Truncate(ex.Reference, 128);
+
+                // Duplicate check
+                if (!string.IsNullOrEmpty(ex.Reference) &&
+                    await _db.SmsProcessingLogs.AnyAsync(l => l.UserId == entry.UserId && l.RuleId == used.Id && l.Reference == ex.Reference && l.Status == "Saved" && l.Id != entry.Id))
+                {
+                    entry.Status = "Duplicate";
+                    entry.Details = $"Reference {ex.Reference} already processed.";
+                    result.Skipped++;
+                    continue;
+                }
+
+                var (merchantId, narration) = await MatchMerchantAsync(ex, message);
+
+                var txId = await _notifications.ConfirmAndSaveNotificationAsync(new ConfirmNotificationRequestDto
+                {
+                    UserId = entry.UserId,
+                    Transaction = new ParsedNotificationResultDto
+                    {
+                        BankName = used.BankName,
+                        SourceType = "SMS",
+                        Amount = ex.Amount,
+                        Currency = ex.Currency,
+                        Direction = ex.Type,
+                        Narration = narration,
+                        TransactionDate = ex.Date ?? received,
+                        BalanceAfter = ex.Balance,
+                        MatchedMerchantId = merchantId
+                    }
+                });
+
+                var tx = await _db.PfmTransactions.FirstOrDefaultAsync(t => t.Id == txId);
+                if (tx != null)
+                {
+                    tx.BankName = used.BankName;
+                    if (!string.IsNullOrWhiteSpace(used.BankCode)) tx.BankCode = used.BankCode;
+                    await _db.SaveChangesAsync();
+                }
+
+                entry.TransactionId = txId;
+                entry.Status = "Saved";
+                entry.Details = "Transaction saved (reprocessed).";
+                result.Saved++;
+                result.Details.Add($"Log {entry.Id}: Saved as transaction {txId} ({ex.Amount} {ex.Currency} at {narration}).");
+            }
+            catch (Exception e)
+            {
+                entry.Status = "Error";
+                entry.Details = "Reprocess error: " + e.Message;
+                result.Errors++;
+                result.Details.Add($"Log {entry.Id} error: {e.Message}");
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return result;
+    }
+
     // ───────────────────────── helpers ─────────────────────────
 
     private static BankSmsRuleVersion Snapshot(BankSmsRule r, string? by) => new()

@@ -4,7 +4,7 @@
 // ============================================================
 const SmsConfig = {
   _rules: [],
-  FIELDS: ['amount', 'type', 'merchant', 'reference', 'date', 'balance', 'currency'],
+  FIELDS: ['amount', 'type', 'merchant', 'narration', 'reference', 'date', 'balance', 'currency'],
 
   // ── helpers ────────────────────────────────────────────────
   esc(s) {
@@ -67,21 +67,47 @@ const SmsConfig = {
     let rows;
     try { rows = await SmsConfig.api('/admin/sms-rules/logs?take=50'); }
     catch (e) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-muted);">${SmsConfig.esc(e.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted);">${SmsConfig.esc(e.message)}</td></tr>`;
       return;
     }
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-muted);">No SMS processed yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted);">No SMS processed yet.</td></tr>`;
       return;
     }
     const color = { Saved: 'var(--accent-emerald)', Duplicate: 'var(--accent-amber)', NoRule: 'var(--text-dim)', NoMatch: 'var(--accent-amber)', ValidationFailed: 'var(--accent-rose)', Error: 'var(--accent-rose)' };
-    tbody.innerHTML = rows.map(l => `<tr>
+    tbody.innerHTML = rows.map((l, idx) => `<tr>
       <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${new Date(l.createdAt).toLocaleString('en-GB')}</td>
       <td style="font-family:monospace;font-size:12px;">${SmsConfig.esc(l.sender)}</td>
       <td><span style="font-weight:600;font-size:12px;color:${color[l.status] || 'inherit'};">${SmsConfig.esc(l.status)}</span>${l.ruleVersion ? ' <span style="color:var(--text-dim);font-size:11px;">v' + l.ruleVersion + '</span>' : ''}</td>
       <td style="font-size:12px;color:var(--text-muted);">${SmsConfig.esc(l.details)}</td>
       <td style="font-size:12px;max-width:340px;" class="truncate" title="${SmsConfig.esc(l.rawMessage)}">${SmsConfig.esc(l.rawMessage)}</td>
+      <td>
+        <button class="btn btn-xs btn-secondary" data-sms-test-idx="${idx}" title="Test or edit rule with this SMS message">
+          <i data-lucide="flask-conical" style="width:12px;margin-right:3px;"></i> Test
+        </button>
+      </td>
     </tr>`).join('');
+    refreshIcons();
+    tbody.querySelectorAll('[data-sms-test-idx]').forEach(b => {
+      b.addEventListener('click', () => {
+        const row = rows[parseInt(b.dataset.smsTestIdx, 10)];
+        if (!row) return;
+        SmsConfig.openModalForMessage(row.sender, row.rawMessage);
+      });
+    });
+  },
+
+  openModalForMessage(sender, message) {
+    const sLower = (sender || '').toLowerCase().trim();
+    const existing = SmsConfig._rules.find(r => (r.senderIds || '').toLowerCase().includes(sLower));
+    SmsConfig.openModal(existing ? existing.id : null);
+    if (message) {
+      document.getElementById('sms-form-sample').value = message;
+    }
+    if (!existing && sender) {
+      document.getElementById('sms-form-senders').value = sender;
+      document.getElementById('sms-form-bank').value = sender.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
   },
 
   // ── modal ──────────────────────────────────────────────────
@@ -141,6 +167,7 @@ const SmsConfig = {
         ['Amount', e.amount ? `${e.amount.toFixed(3)} ${SmsConfig.esc(e.currency)}` : '—'],
         ['Transaction type', SmsConfig.esc(e.type || '—')],
         ['Merchant', SmsConfig.esc(e.merchant || '—')],
+        ['Narration', SmsConfig.esc(e.narration || '— (defaults to raw SMS)')],
         ['Reference', SmsConfig.esc(e.reference || '—')],
         ['Date', e.date ? new Date(e.date).toLocaleString('en-GB') : '—'],
         ['Balance', e.balance != null ? e.balance.toFixed(3) : '—'],

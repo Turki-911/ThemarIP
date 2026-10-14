@@ -95,7 +95,7 @@ public class SmsProcessingService : ISmsProcessingService
                 await _db.SmsProcessingLogs.AnyAsync(l => l.UserId == userId && l.RuleId == used.Id && l.Reference == ex.Reference && l.Status == "Saved"))
                 return await Finish(entry, "Duplicate", $"Reference {ex.Reference} already processed.", ex);
 
-            var (merchantId, narration) = await MatchMerchantAsync(ex);
+            var (merchantId, narration) = await MatchMerchantAsync(ex, message);
 
             var txId = await _notifications.ConfirmAndSaveNotificationAsync(new ConfirmNotificationRequestDto
             {
@@ -142,20 +142,39 @@ public class SmsProcessingService : ISmsProcessingService
         return new SmsIngestResultDto { Status = status, Message = details, Extracted = ex, TransactionId = txId };
     }
 
-    private async Task<(Guid? Id, string Narration)> MatchMerchantAsync(SmsExtractedDto ex)
+    private async Task<(Guid? Id, string Narration)> MatchMerchantAsync(SmsExtractedDto ex, string rawMessage)
     {
         var text = ex.Merchant;
-        if (string.IsNullOrWhiteSpace(text))
-            return (null, ex.Type == "CREDIT" ? "SMS Credit" : "SMS Debit");
+        var narration = !string.IsNullOrWhiteSpace(ex.Narration)
+            ? ex.Narration
+            : (!string.IsNullOrWhiteSpace(rawMessage) ? rawMessage : (!string.IsNullOrWhiteSpace(text) ? text : (ex.Type == "CREDIT" ? "SMS Credit" : "SMS Debit")));
+        narration = Truncate(narration, 512) ?? string.Empty;
 
         var merchants = await _db.PfmMerchants.Include(m => m.Aliases).Where(m => m.IsActive).ToListAsync();
-        foreach (var m in merchants)
+
+        // 1. Try matching against extracted merchant
+        if (!string.IsNullOrWhiteSpace(text))
         {
-            if ((!string.IsNullOrWhiteSpace(m.Name) && text.Contains(m.Name, StringComparison.OrdinalIgnoreCase)) ||
-                m.Aliases.Any(a => !string.IsNullOrWhiteSpace(a.AliasText) && text.Contains(a.AliasText, StringComparison.OrdinalIgnoreCase)))
-                return (m.Id, text);
+            foreach (var m in merchants)
+            {
+                if ((!string.IsNullOrWhiteSpace(m.Name) && text.Contains(m.Name, StringComparison.OrdinalIgnoreCase)) ||
+                    m.Aliases.Any(a => !string.IsNullOrWhiteSpace(a.AliasText) && text.Contains(a.AliasText, StringComparison.OrdinalIgnoreCase)))
+                    return (m.Id, narration);
+            }
         }
-        return (null, text);
+
+        // 2. Try matching against full raw message
+        if (!string.IsNullOrWhiteSpace(rawMessage))
+        {
+            foreach (var m in merchants)
+            {
+                if ((!string.IsNullOrWhiteSpace(m.Name) && rawMessage.Contains(m.Name, StringComparison.OrdinalIgnoreCase)) ||
+                    m.Aliases.Any(a => !string.IsNullOrWhiteSpace(a.AliasText) && rawMessage.Contains(a.AliasText, StringComparison.OrdinalIgnoreCase)))
+                    return (m.Id, narration);
+            }
+        }
+
+        return (null, narration);
     }
 
     // ───────────────────────── Senders / test ─────────────────────────

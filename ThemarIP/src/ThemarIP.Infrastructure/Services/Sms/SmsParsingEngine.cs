@@ -15,7 +15,7 @@ public static class SmsParsingEngine
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
-    public static readonly string[] Fields = { "amount", "type", "merchant", "reference", "date", "balance", "currency" };
+    public static readonly string[] Fields = { "amount", "type", "merchant", "narration", "reference", "date", "balance", "currency" };
 
     public static bool TryCompile(string pattern, out Regex? regex, out string? error)
     {
@@ -67,6 +67,7 @@ public static class SmsParsingEngine
         {
             Currency = (G("currency") ?? rule.DefaultCurrency ?? "OMR").ToUpperInvariant(),
             Merchant = G("merchant")?.TrimEnd('.', ',', ' '),
+            Narration = G("narration")?.TrimEnd('.', ',', ' '),
             Reference = G("reference"),
         };
 

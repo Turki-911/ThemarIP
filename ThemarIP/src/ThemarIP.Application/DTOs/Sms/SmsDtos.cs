@@ -18,6 +18,7 @@ public class SmsExtractedDto
     public string Currency { get; set; } = "OMR";
     public string Type { get; set; } = string.Empty; // DEBIT | CREDIT
     public string? Merchant { get; set; }
+    public string? Narration { get; set; }
     public string? Reference { get; set; }
     public DateTimeOffset? Date { get; set; }
     public decimal? Balance { get; set; }

@@ -819,10 +819,48 @@ function categorizeNarration(narration) {
     }
   }
 
-  // 2. Use live CategoryRules from themarip.db (sorted by Priority desc)
-  const sorted = [..._dbCategoryRules].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  // 2. Use live CategoryRules from themarip.db (sorted by Priority asc/desc)
+  const sorted = [..._dbCategoryRules].sort((a, b) => (a.priority || 99) - (b.priority || 99));
   for (const rule of sorted) {
-    if (!rule.isActive) continue;
+    const isActive = rule.status === 'active' || rule.isActive === true;
+    if (!isActive) continue;
+
+    // Evaluate PfmCategorizationRule conditions
+    if (Array.isArray(rule.conditions) && rule.conditions.length > 0) {
+      let matchedKeyword = '';
+      const allMatched = rule.conditions.every(c => {
+        const val = (c.value || '').toUpperCase();
+        if (!val) return false;
+        const op = (c.operator || 'contains').toLowerCase();
+        let hit = false;
+        if (op === 'contains') hit = n.includes(val);
+        else if (op === 'equals') hit = n === val;
+        else if (op === 'starts_with') hit = n.startsWith(val);
+        else if (op === 'ends_with') hit = n.endsWith(val);
+        if (hit && !matchedKeyword) matchedKeyword = c.value;
+        return hit;
+      });
+      if (allMatched && rule.categoryId) {
+        const conf = rule.confidence || 90;
+        const mName = matchedKeyword || rule.name || 'Other';
+        return {
+          merchantName:  mName,
+          m:             `m-${mName.toLowerCase().replace(/\s+/g, '-')}`,
+          categoryId:    rule.categoryId,
+          cat:           rule.categoryId,
+          subcategoryId: rule.subcategoryId || '',
+          sub:           rule.subcategoryId || '',
+          confidence:    conf,
+          conf:          conf,
+          status:        'categorized',
+          source:        'RULE_ENGINE',
+          src:           'RULE_ENGINE',
+          scores: { merchantMatch:35, mccMatch:25, narrationMatch:20, historicalMatch:10, amountPattern:0 }
+        };
+      }
+    }
+
+    // Legacy keyword rule fallback
     if (rule.keyword && n.includes(rule.keyword.toUpperCase())) {
       const ids = _ruleCatMap[rule.category] || { categoryId: 'cat-other', subcategoryId: '' };
       return {
@@ -842,35 +880,20 @@ function categorizeNarration(narration) {
     }
   }
 
-  // Extract dynamic merchant name from narration if present
-  let extractedMerchant = 'Other';
-  const rawText = String(narration || '').trim();
-  // Pattern 1: Card ... used for ... at <STORE> on <DATE>
-  const mAt = rawText.match(/\bat\s+([A-Za-z0-9\s._&-]+?)\s+on\b/i);
-  if (mAt && mAt[1] && mAt[1].trim()) {
-    extractedMerchant = mAt[1].trim();
-  } else {
-    // Pattern 2: Received ... from <SENDER> in your a/c
-    const mFrom = rawText.match(/\bfrom\s+([A-Za-z\s._&-]+?)\s+(?:in\s+your|using|on\b)/i);
-    if (mFrom && mFrom[1] && mFrom[1].trim()) {
-      extractedMerchant = mFrom[1].trim();
-    }
-  }
-
-  // Uncategorized fallback with extracted merchant
+  // Uncategorized fallback: keep merchantName as 'Other'
   return {
-    merchantName: extractedMerchant,
-    m: extractedMerchant !== 'Other' ? `m-${extractedMerchant.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : '',
+    merchantName: 'Other',
+    m: '',
     categoryId: 'cat-other',
     cat: 'cat-other',
     subcategoryId: 'sub-uncategorized',
     sub: 'sub-uncategorized',
-    confidence: extractedMerchant !== 'Other' ? 50 : 30,
-    conf: extractedMerchant !== 'Other' ? 50 : 30,
+    confidence: 30,
+    conf: 30,
     status: 'uncategorized',
-    source: extractedMerchant !== 'Other' ? 'SMS_EXTRACT' : 'UNCATEGORIZED',
-    src: extractedMerchant !== 'Other' ? 'SMS_EXTRACT' : 'UNCATEGORIZED',
-    scores: { merchantMatch: 20, mccMatch: 0, narrationMatch: 20, historicalMatch: 5, amountPattern: 5 }
+    source: 'UNCATEGORIZED',
+    src: 'UNCATEGORIZED',
+    scores: { merchantMatch: 0, mccMatch: 0, narrationMatch: 20, historicalMatch: 5, amountPattern: 5 }
   };
 }
 

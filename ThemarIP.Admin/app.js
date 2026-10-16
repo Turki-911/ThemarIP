@@ -305,12 +305,12 @@ const Utils = {
     const labels = {
       MERCHANT_MAPPING:'Merchant Mapping', MCC:'MCC', RULE:'Rule',
       NARRATION:'Narration', HISTORICAL:'Historical', USER_RULE:'User Rule',
-      MANUAL:'Manual', UNCATEGORIZED:'Uncategorized'
+      MANUAL:'Manual', UNCATEGORIZED:'Uncategorized', SMS_EXTRACT:'SMS Extracted'
     };
     const cls = {
       MERCHANT_MAPPING:'source-merchant', MCC:'source-mcc', RULE:'source-rule',
       NARRATION:'source-narration', HISTORICAL:'source-historical', USER_RULE:'source-user-rule',
-      MANUAL:'source-manual', UNCATEGORIZED:'source-uncategorized'
+      MANUAL:'source-manual', UNCATEGORIZED:'source-uncategorized', SMS_EXTRACT:'source-narration'
     };
     return `<span class="source-badge ${cls[src]||''}">${labels[src]||src}</span>`;
   },
@@ -842,12 +842,35 @@ function categorizeNarration(narration) {
     }
   }
 
-  // Uncategorized fallback
+  // Extract dynamic merchant name from narration if present
+  let extractedMerchant = 'Other';
+  const rawText = String(narration || '').trim();
+  // Pattern 1: Card ... used for ... at <STORE> on <DATE>
+  const mAt = rawText.match(/\bat\s+([A-Za-z0-9\s._&-]+?)\s+on\b/i);
+  if (mAt && mAt[1] && mAt[1].trim()) {
+    extractedMerchant = mAt[1].trim();
+  } else {
+    // Pattern 2: Received ... from <SENDER> in your a/c
+    const mFrom = rawText.match(/\bfrom\s+([A-Za-z\s._&-]+?)\s+(?:in\s+your|using|on\b)/i);
+    if (mFrom && mFrom[1] && mFrom[1].trim()) {
+      extractedMerchant = mFrom[1].trim();
+    }
+  }
+
+  // Uncategorized fallback with extracted merchant
   return {
-    merchantName:'Other', m:'', categoryId:'cat-other', cat:'cat-other',
-    subcategoryId:'sub-uncategorized', sub:'sub-uncategorized',
-    confidence:30, conf:30, status:'uncategorized', source:'DB_RULE', src:'DB_RULE',
-    scores:{ merchantMatch:5, mccMatch:5, narrationMatch:10, historicalMatch:5, amountPattern:5 }
+    merchantName: extractedMerchant,
+    m: extractedMerchant !== 'Other' ? `m-${extractedMerchant.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : '',
+    categoryId: 'cat-other',
+    cat: 'cat-other',
+    subcategoryId: 'sub-uncategorized',
+    sub: 'sub-uncategorized',
+    confidence: extractedMerchant !== 'Other' ? 50 : 30,
+    conf: extractedMerchant !== 'Other' ? 50 : 30,
+    status: 'uncategorized',
+    source: extractedMerchant !== 'Other' ? 'SMS_EXTRACT' : 'UNCATEGORIZED',
+    src: extractedMerchant !== 'Other' ? 'SMS_EXTRACT' : 'UNCATEGORIZED',
+    scores: { merchantMatch: 20, mccMatch: 0, narrationMatch: 20, historicalMatch: 5, amountPattern: 5 }
   };
 }
 
@@ -862,12 +885,23 @@ async function loadRealTransactions() {
           const amountValue   = Math.abs(t.amount !== undefined ? t.amount : (t.Amount !== undefined ? t.Amount : 0));
           const balanceValue  = t.balanceAfter !== undefined ? t.balanceAfter : (t.balance !== undefined ? t.balance : (t.BalanceAfter !== undefined ? t.BalanceAfter : (t.Balance !== undefined ? t.Balance : 0)));
           const txType        = (t.transactionType === 0 || t.TransactionType === 0) ? 'debit' : 'credit';
-          const txDate        = (t.transactionDate || t.TransactionDate) ? (t.transactionDate || t.TransactionDate).split('T')[0] : '2026-09-01';
+          const rawDateStr    = t.transactionDate || t.TransactionDate || '';
+          const txDate        = rawDateStr ? rawDateStr.split('T')[0] : '2026-09-01';
+          const txFullDate    = rawDateStr || '2026-09-01T00:00:00';
+          const userIdVal     = t.userId || t.UserId || '';
+          const bankNameVal   = t.bankName || t.BankName || '';
+          const bankCodeVal   = t.bankCode || t.BankCode || '';
+          const userObj       = (typeof Users !== 'undefined' && Array.isArray(Users._users)) ? Users._users.find(u => u.id === userIdVal) : null;
+          const userLabel     = userObj ? (userObj.fullName || userObj.email) : '';
 
           const catInfo = categorizeNarration(narrationText);
 
           return {
             id: t.id || t.Id || `txn-live-${idx}`,
+            userId: userIdVal,
+            userName: userLabel,
+            bankName: bankNameVal,
+            bankCode: bankCodeVal,
             merchantName: catInfo.merchantName,
             narration: narrationText,
             amount: amountValue,
@@ -879,6 +913,7 @@ async function loadRealTransactions() {
             source: catInfo.source,
             status: catInfo.status,
             date: txDate,
+            dateTime: txFullDate,
             scores: catInfo.scores,
             n: narrationText, amt: amountValue,
             cat: catInfo.cat, sub: catInfo.sub, conf: catInfo.conf, src: catInfo.src, m: catInfo.m
@@ -1178,7 +1213,7 @@ const Transactions = {
       if (state.txnFilterConfidence==='low')     txns = txns.filter(t=>t.confidence>0 && t.confidence<band.medium.min);
     }
     // Sort newest first
-    txns.sort((a,b)=>new Date(b.date)-new Date(a.date));
+    txns.sort((a,b)=>new Date(b.dateTime || b.date) - new Date(a.dateTime || a.date));
     Transactions._filtered = txns;
   },
 
@@ -1197,7 +1232,7 @@ const Transactions = {
       tbody.innerHTML = paged.map(t=>`
         <tr class="clickable" data-txn-id="${t.id}">
           <td style="white-space:nowrap;font-size:12px;color:var(--text-muted);">${Utils.fmt.date(t.date)}</td>
-          <td style="font-weight:500;">${t.merchantName}</td>
+          <td style="font-weight:500;">${t.merchantName}${t.bankName ? `<br><span style="font-size:10px;color:var(--text-dim);font-weight:400;">${t.bankName}</span>` : ''}</td>
           <td style="font-size:12px;color:var(--text-muted);max-width:180px;" class="truncate" title="${t.narration}">${t.narration}</td>
           <td style="font-weight:600;white-space:nowrap;">${Utils.fmt.omr(t.amount)}</td>
           <td><span class="badge ${t.type==='debit'?'badge-inactive':'badge-active'}" style="font-size:10px;">${t.type}</span></td>
@@ -1239,12 +1274,14 @@ const Transactions = {
     document.getElementById('txn-drawer-body').innerHTML = `
       <div class="drawer-section">
         <div class="drawer-section-title">Transaction</div>
-        <div class="detail-row"><span class="detail-label">Date</span><span class="detail-value">${Utils.fmt.date(txn.date)}</span></div>
+        <div class="detail-row"><span class="detail-label">Date & Time</span><span class="detail-value">${Utils.fmt.date(txn.date)} ${txn.dateTime && txn.dateTime.includes('T') ? txn.dateTime.split('T')[1].split('.')[0] : ''}</span></div>
         <div class="detail-row"><span class="detail-label">Merchant</span><span class="detail-value" style="font-weight:600;">${txn.merchantName}</span></div>
         <div class="detail-row"><span class="detail-label">Narration</span><span class="detail-value" style="font-family:monospace;font-size:12px;">${txn.narration}</span></div>
         <div class="detail-row"><span class="detail-label">Amount</span><span class="detail-value" style="font-weight:700;font-size:18px;">${Utils.fmt.omr(txn.amount)}</span></div>
         <div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">${Utils.statusBadge(txn.type)}</span></div>
         <div class="detail-row"><span class="detail-label">Balance After</span><span class="detail-value">${Utils.fmt.omr(txn.balanceAfter)}</span></div>
+        ${txn.bankName ? `<div class="detail-row"><span class="detail-label">Bank</span><span class="detail-value" style="font-weight:600;">${txn.bankName}</span></div>` : ''}
+        ${txn.userName ? `<div class="detail-row"><span class="detail-label">User Account</span><span class="detail-value" style="font-weight:600;">${txn.userName}</span></div>` : ''}
         ${txn.isRecurring ? '<div class="detail-row"><span class="detail-label">Flags</span><span class="badge badge-approved" style="font-size:10px;"><i data-lucide="repeat" style="width:10px;"></i> Recurring</span></div>' : ''}
       </div>
 

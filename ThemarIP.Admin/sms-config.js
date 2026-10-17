@@ -114,9 +114,6 @@ const SmsConfig = {
         </td></tr>`;
     }).join('');
     refreshIcons();
-    tbody.querySelectorAll('[data-sms-edit]').forEach(b => b.addEventListener('click', () => SmsConfig.openModal(b.dataset.smsEdit)));
-    tbody.querySelectorAll('[data-sms-toggle]').forEach(b => b.addEventListener('click', () => SmsConfig.toggle(b.dataset.smsToggle)));
-    tbody.querySelectorAll('[data-sms-delete]').forEach(b => b.addEventListener('click', () => SmsConfig.remove(b.dataset.smsDelete)));
   },
 
   async loadLog() {
@@ -480,15 +477,39 @@ const SmsConfig = {
     } catch (e) { Toast.error(e.message); }
   },
 
+  _initialized: false,
   initEvents() {
-    const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
-    on('btn-add-sms-rule', () => SmsConfig.openModal(null));
-    on('btn-refresh-sms-log', () => SmsConfig.loadLog());
-    on('btn-reprocess-sms-log', () => SmsConfig.reprocessLogs());
-    on('sms-modal-close', SmsConfig.closeModal);
-    on('sms-modal-cancel', SmsConfig.closeModal);
-    on('sms-modal-save', SmsConfig.save);
-    on('sms-btn-add-pattern', SmsConfig.addPattern);
+    if (SmsConfig._initialized) return;
+    SmsConfig._initialized = true;
+
+    document.addEventListener('click', (e) => {
+      const addRuleBtn = e.target.closest('#btn-add-sms-rule');
+      if (addRuleBtn) { e.preventDefault(); SmsConfig.openModal(null); return; }
+
+      const editBtn = e.target.closest('[data-sms-edit]');
+      if (editBtn) { e.preventDefault(); SmsConfig.openModal(editBtn.dataset.smsEdit); return; }
+
+      const toggleBtn = e.target.closest('[data-sms-toggle]');
+      if (toggleBtn) { e.preventDefault(); SmsConfig.toggle(toggleBtn.dataset.smsToggle); return; }
+
+      const delBtn = e.target.closest('[data-sms-delete]');
+      if (delBtn) { e.preventDefault(); SmsConfig.remove(delBtn.dataset.smsDelete); return; }
+
+      const addPatBtn = e.target.closest('#sms-btn-add-pattern');
+      if (addPatBtn) { e.preventDefault(); SmsConfig.addPattern(); return; }
+
+      const closeBtn = e.target.closest('#sms-modal-close, #sms-modal-cancel');
+      if (closeBtn) { e.preventDefault(); SmsConfig.closeModal(); return; }
+
+      const saveBtn = e.target.closest('#sms-modal-save');
+      if (saveBtn) { e.preventDefault(); SmsConfig.save(); return; }
+
+      const refreshLogBtn = e.target.closest('#btn-refresh-sms-log');
+      if (refreshLogBtn) { e.preventDefault(); SmsConfig.loadLog(); return; }
+
+      const reprocessLogBtn = e.target.closest('#btn-reprocess-sms-log');
+      if (reprocessLogBtn) { e.preventDefault(); SmsConfig.reprocessLogs(); return; }
+    });
 
     const bankInput = document.getElementById('sms-form-bank');
     if (bankInput) {

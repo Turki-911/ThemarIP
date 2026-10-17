@@ -1217,6 +1217,12 @@
         <div class="form-group" style="flex:1;"><label class="form-label">Default currency</label><input type="text" id="sms-form-currency" class="form-control" value="OMR"></div>
         <div class="form-group" style="flex:2;"><label class="form-label">Date formats <span style="color:var(--text-dim);font-weight:400;">(optional, | separated)</span></label><input type="text" id="sms-form-datefmt" class="form-control" placeholder="dd/MM/yyyy HH:mm|dd-MMM-yyyy"></div>
       </div>
+      <div id="sms-test-result" style="display:none;"></div>
+      <div style="display:none;" aria-hidden="true">
+        <input id="sms-form-sample"><input id="sms-form-pattern"><button type="button" id="sms-btn-test"></button>
+        <input id="sms-map-amount"><input id="sms-map-type"><input id="sms-map-merchant"><input id="sms-map-narration">
+        <input id="sms-map-reference"><input id="sms-map-date"><input id="sms-map-balance"><input id="sms-map-currency">
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" id="sms-modal-cancel">Cancel</button>
@@ -1249,7 +1255,7 @@
 <!-- ============================================================ -->
 <div id="toast-container" class="toast-container"></div>
 
-<script src="app.js"></script>
-<script src="sms-config.js"></script>
+<script src="app.js?v=20261017b"></script>
+<script src="sms-config.js?v=20261017b"></script>
 </body>
 </html>

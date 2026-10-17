@@ -1165,8 +1165,18 @@
       <input type="hidden" id="sms-form-id">
       <div class="form-row">
         <div class="form-group" style="flex:2;">
-          <label class="form-label">Bank *</label>
-          <input type="text" id="sms-form-bank" class="form-control" placeholder="e.g. Bank Muscat">
+          <label class="form-label">Bank * <span style="color:var(--text-dim);font-weight:400;">(linked to App Bank Selection)</span></label>
+          <input type="text" id="sms-form-bank" list="sms-app-banks" class="form-control" placeholder="e.g. Bank Muscat">
+          <datalist id="sms-app-banks">
+            <option value="Bank Muscat"></option>
+            <option value="National Bank of Oman"></option>
+            <option value="Bank Dhofar"></option>
+            <option value="Oman Arab Bank"></option>
+            <option value="Sohar International"></option>
+            <option value="Ahli Bank Oman"></option>
+            <option value="Bank Nizwa"></option>
+            <option value="Alizz Islamic Bank"></option>
+          </datalist>
         </div>
         <div class="form-group" style="flex:1;">
           <label class="form-label">Bank code</label>
@@ -1184,30 +1194,13 @@
         <label class="form-label">Sender IDs * <span style="color:var(--text-dim);font-weight:400;">(comma separated, as shown on the phone)</span></label>
         <input type="text" id="sms-form-senders" class="form-control" placeholder="BankMuscat, BM-ALERT">
       </div>
-      <div class="form-group">
-        <label class="form-label">Sample message</label>
-        <textarea id="sms-form-sample" class="form-control" rows="2" placeholder="Your account was debited OMR 12.500 at Store ABC. Ref: 847291."></textarea>
+      <div style="margin:16px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Message patterns <span style="font-weight:400;text-transform:none;">— each SMS format for this bank (tried in order)</span></div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Message pattern (regex with named groups) *</label>
-        <textarea id="sms-form-pattern" class="form-control" rows="3" style="font-family:monospace;font-size:12px;" placeholder="debited\s+(?&lt;currency&gt;[A-Z]{3})\s*(?&lt;amount&gt;[\d.,]+)\s+at\s+(?&lt;merchant&gt;.+?)\.\s*Ref:\s*(?&lt;ref&gt;\w+)"></textarea>
-      </div>
+      <div id="sms-patterns-list"></div>
+      <button class="btn btn-secondary btn-sm" id="sms-btn-add-pattern" type="button" style="margin-top:4px;"><i data-lucide="plus"></i> Add Another Pattern &amp; Sample Message</button>
 
-      <div style="margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Field mappings <span style="font-weight:400;text-transform:none;">— name of the regex group that holds each value</span></div>
-      <div class="form-row">
-        <div class="form-group" style="flex:1;"><label class="form-label">Amount *</label><input type="text" id="sms-map-amount" class="form-control" style="font-family:monospace;" placeholder="amount"></div>
-        <div class="form-group" style="flex:1;"><label class="form-label">Transaction type</label><input type="text" id="sms-map-type" class="form-control" style="font-family:monospace;" placeholder="type"></div>
-        <div class="form-group" style="flex:1;"><label class="form-label">Merchant</label><input type="text" id="sms-map-merchant" class="form-control" style="font-family:monospace;" placeholder="merchant"></div>
-        <div class="form-group" style="flex:1;"><label class="form-label">Narration <span style="font-weight:400;color:var(--text-dim);">(opt)</span></label><input type="text" id="sms-map-narration" class="form-control" style="font-family:monospace;" placeholder="raw SMS if blank"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group" style="flex:1;"><label class="form-label">Reference</label><input type="text" id="sms-map-reference" class="form-control" style="font-family:monospace;" placeholder="ref"></div>
-        <div class="form-group" style="flex:1;"><label class="form-label">Date</label><input type="text" id="sms-map-date" class="form-control" style="font-family:monospace;" placeholder="date"></div>
-        <div class="form-group" style="flex:1;"><label class="form-label">Balance</label><input type="text" id="sms-map-balance" class="form-control" style="font-family:monospace;" placeholder="balance"></div>
-        <div class="form-group" style="flex:1;"><label class="form-label">Currency</label><input type="text" id="sms-map-currency" class="form-control" style="font-family:monospace;" placeholder="currency"></div>
-      </div>
-
-      <div style="margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Transaction type &amp; formats</div>
+      <div style="margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Transaction type &amp; formats <span style="font-weight:400;text-transform:none;">— shared by all patterns</span></div>
       <div class="form-row">
         <div class="form-group" style="flex:1;"><label class="form-label">Debit keywords</label><input type="text" id="sms-form-debit" class="form-control" value="debited,withdrawn,purchase,spent,paid"></div>
         <div class="form-group" style="flex:1;"><label class="form-label">Credit keywords</label><input type="text" id="sms-form-credit" class="form-control" value="credited,received,deposit,refund"></div>
@@ -1224,12 +1217,6 @@
         <div class="form-group" style="flex:1;"><label class="form-label">Default currency</label><input type="text" id="sms-form-currency" class="form-control" value="OMR"></div>
         <div class="form-group" style="flex:2;"><label class="form-label">Date formats <span style="color:var(--text-dim);font-weight:400;">(optional, | separated)</span></label><input type="text" id="sms-form-datefmt" class="form-control" placeholder="dd/MM/yyyy HH:mm|dd-MMM-yyyy"></div>
       </div>
-
-      <div style="margin-top:16px;display:flex;align-items:center;gap:10px;">
-        <button class="btn btn-secondary btn-sm" id="sms-btn-test"><i data-lucide="flask-conical"></i> Test against a message</button>
-        <span style="font-size:12px;color:var(--text-dim);">Uses the sample message above — paste a new SMS there to test an updated format.</span>
-      </div>
-      <div id="sms-test-result" style="margin-top:12px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" id="sms-modal-cancel">Cancel</button>

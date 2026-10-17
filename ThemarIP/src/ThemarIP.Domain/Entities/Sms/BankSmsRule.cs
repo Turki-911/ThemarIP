@@ -41,6 +41,14 @@ public class BankSmsRule
 
     public string SampleMessage { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Optional JSON array of message patterns grouped under this bank rule, e.g.
+    /// [{"name":"Credit Card","sampleMessage":"...","pattern":"...","fieldMappings":{"amount":"amount"},"defaultType":"DEBIT"}].
+    /// When empty, the single <see cref="Pattern"/> / <see cref="FieldMappings"/> / <see cref="SampleMessage"/> are used.
+    /// The first entry is always mirrored into those columns for backward compatibility.
+    /// </summary>
+    public string? Patterns { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     /// <summary>Incremented on every change to pattern/mappings; history in <see cref="BankSmsRuleVersion"/>.</summary>

@@ -46,10 +46,23 @@ public class BankSmsRuleDto
     public string DefaultCurrency { get; set; } = "OMR";
     public string DateFormats { get; set; } = string.Empty;
     public string SampleMessage { get; set; } = string.Empty;
+    /// <summary>All message patterns grouped under this bank. The first one mirrors Pattern / FieldMappings / SampleMessage.</summary>
+    public List<SmsPatternDto> Patterns { get; set; } = new();
     public bool IsActive { get; set; } = true;
     public int Version { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>One message format (e.g. "Credit Card", "Transfer Received") inside a bank rule.</summary>
+public class SmsPatternDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string SampleMessage { get; set; } = string.Empty;
+    public string Pattern { get; set; } = string.Empty;
+    public Dictionary<string, string> FieldMappings { get; set; } = new();
+    /// <summary>DEBIT / CREDIT, or empty to use the bank's default type.</summary>
+    public string DefaultType { get; set; } = string.Empty;
 }
 
 public class SmsRuleTestRequestDto

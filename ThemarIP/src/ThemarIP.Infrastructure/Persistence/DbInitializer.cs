@@ -13,6 +13,14 @@ public static class DbInitializer
     public static async Task SeedAsync(ApplicationDbContext context, IPasswordHasher passwordHasher)
     {
         await context.Database.MigrateAsync();
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync("ALTER TABLE BankSmsRules ADD COLUMN Patterns TEXT;");
+        }
+        catch
+        {
+            // Column already exists
+        }
 
         if (!await context.Users.AnyAsync())
         {

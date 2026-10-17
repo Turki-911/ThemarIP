@@ -365,10 +365,17 @@ def main():
         tx_count += 1
 
     # 3f. Sync Bank SMS Rules (BankSmsRules)
+    try:
+        cur.execute("ALTER TABLE BankSmsRules ADD COLUMN Patterns TEXT")
+    except sqlite3.OperationalError:
+        pass
+
     for sr in live_data["sms-rules"]:
         srid = sr.get("id")
         fm = sr.get("fieldMappings")
         fm_str = json.dumps(fm) if isinstance(fm, (dict, list)) else (fm or "{}")
+        pats = sr.get("patterns")
+        pats_str = json.dumps(pats) if isinstance(pats, (dict, list)) else (pats or None)
         cur.execute("SELECT Id FROM BankSmsRules WHERE lower(Id) = lower(?)", (srid,))
         ex_sr = cur.fetchone()
         if ex_sr:
@@ -376,7 +383,7 @@ def main():
                 """UPDATE BankSmsRules
                    SET BankName = ?, BankCode = ?, SenderIds = ?, Pattern = ?, FieldMappings = ?,
                        DebitKeywords = ?, CreditKeywords = ?, DefaultType = ?, DefaultCurrency = ?,
-                       DateFormats = ?, SampleMessage = ?, IsActive = ?, Version = ?, UpdatedAt = ?, UpdatedBy = ?
+                       DateFormats = ?, SampleMessage = ?, Patterns = ?, IsActive = ?, Version = ?, UpdatedAt = ?, UpdatedBy = ?
                    WHERE Id = ?""",
                 (
                     sr.get("bankName") or "",
@@ -390,6 +397,7 @@ def main():
                     sr.get("defaultCurrency") or "OMR",
                     sr.get("dateFormats") or "",
                     sr.get("sampleMessage") or "",
+                    pats_str,
                     1 if sr.get("isActive", True) else 0,
                     sr.get("version") or 1,
                     sr.get("updatedAt") or ts_now,
@@ -402,8 +410,8 @@ def main():
                 """INSERT INTO BankSmsRules (
                        Id, BankName, BankCode, SenderIds, Pattern, FieldMappings,
                        DebitKeywords, CreditKeywords, DefaultType, DefaultCurrency,
-                       DateFormats, SampleMessage, IsActive, Version, CreatedAt, UpdatedAt, UpdatedBy
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       DateFormats, SampleMessage, Patterns, IsActive, Version, CreatedAt, UpdatedAt, UpdatedBy
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     srid,
                     sr.get("bankName") or "",
@@ -417,6 +425,7 @@ def main():
                     sr.get("defaultCurrency") or "OMR",
                     sr.get("dateFormats") or "",
                     sr.get("sampleMessage") or "",
+                    pats_str,
                     1 if sr.get("isActive", True) else 0,
                     sr.get("version") or 1,
                     sr.get("createdAt") or ts_now,

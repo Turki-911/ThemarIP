@@ -60,9 +60,27 @@ public class SmsProcessingService : ISmsProcessingService
             if (await _db.SmsProcessingLogs.AnyAsync(l => l.UserId == userId && l.MessageHash == entry.MessageHash && l.Status == "Saved"))
                 return await Finish(entry, "Duplicate", "This SMS was already processed.");
 
-            var rules = (await _db.BankSmsRules.Where(r => r.IsActive).ToListAsync())
-                .Where(r => SenderMatches(r.SenderIds, sender))
-                .OrderByDescending(r => r.UpdatedAt)
+            // Link user's selected bank(s) (supports multi-bank selection in user.AccountNumber)
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            var userBanks = SplitSenders(user?.AccountNumber ?? string.Empty);
+
+            var allRules = await _db.BankSmsRules.ToListAsync();
+            var autoActivated = false;
+            if (userBanks.Count > 0)
+            {
+                foreach (var r in allRules.Where(r => !r.IsActive && RuleMatchesBanks(r, userBanks)))
+                {
+                    r.IsActive = true;
+                    r.UpdatedAt = DateTimeOffset.UtcNow;
+                    autoActivated = true;
+                }
+                if (autoActivated) await _db.SaveChangesAsync();
+            }
+
+            var rules = allRules
+                .Where(r => r.IsActive && SenderMatches(r.SenderIds, sender))
+                .OrderByDescending(r => userBanks.Count > 0 && RuleMatchesBanks(r, userBanks) ? 1 : 0)
+                .ThenByDescending(r => r.UpdatedAt)
                 .ToList();
 
             if (rules.Count == 0)
@@ -72,8 +90,8 @@ public class SmsProcessingService : ISmsProcessingService
             SmsRuleTestResultDto? parsed = null;
             foreach (var r in rules)
             {
-                var res = SmsParsingEngine.Run(ToDto(r), message, received);
-                if (res.Matched) { used = r; parsed = res; break; }
+                var (res, _) = SmsParsingEngine.RunAny(ToDto(r), message, received);
+                if (res != null) { used = r; parsed = res; break; }
             }
 
             if (used == null || parsed?.Extracted == null)
@@ -197,16 +215,39 @@ public class SmsProcessingService : ISmsProcessingService
     {
         if (string.IsNullOrWhiteSpace(dto.BankName)) throw new ArgumentException("Bank name is required.");
         if (SplitSenders(dto.SenderIds).Count == 0) throw new ArgumentException("At least one sender ID is required.");
-        if (!SmsParsingEngine.TryCompile(dto.Pattern, out var regex, out var err)) throw new ArgumentException(err);
 
-        var names = regex!.GetGroupNames();
-        foreach (var kv in dto.FieldMappings.Where(kv => !string.IsNullOrWhiteSpace(kv.Value)))
+        // Every pattern grouped under this bank (falls back to the single legacy pattern).
+        var patterns = SmsParsingEngine.EffectivePatterns(dto).Select(p => new SmsPatternDto
         {
-            if (!SmsParsingEngine.Fields.Contains(kv.Key.ToLowerInvariant())) throw new ArgumentException($"Unknown field '{kv.Key}'.");
-            if (!names.Contains(kv.Value)) throw new ArgumentException($"Field '{kv.Key}' maps to group '{kv.Value}' which is not in the pattern.");
+            Name = (p.Name ?? string.Empty).Trim(),
+            SampleMessage = p.SampleMessage ?? string.Empty,
+            Pattern = p.Pattern ?? string.Empty,
+            FieldMappings = (p.FieldMappings ?? new())
+                .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+                .ToDictionary(kv => kv.Key, kv => kv.Value.Trim()),
+            DefaultType = (p.DefaultType ?? string.Empty).Trim().ToUpperInvariant()
+        }).ToList();
+
+        for (var i = 0; i < patterns.Count; i++)
+        {
+            var p = patterns[i];
+            var label = string.IsNullOrWhiteSpace(p.Name) ? $"Pattern {i + 1}" : $"Pattern \"{p.Name}\"";
+            if (!SmsParsingEngine.TryCompile(p.Pattern, out var regex, out var err)) throw new ArgumentException($"{label}: {err}");
+            var names = regex!.GetGroupNames();
+            foreach (var kv in p.FieldMappings)
+            {
+                if (!SmsParsingEngine.Fields.Contains(kv.Key.ToLowerInvariant())) throw new ArgumentException($"{label}: unknown field '{kv.Key}'.");
+                if (!names.Contains(kv.Value)) throw new ArgumentException($"{label}: field '{kv.Key}' maps to group '{kv.Value}' which is not in the pattern.");
+            }
+            if (!p.FieldMappings.TryGetValue("amount", out var amountGroup) || string.IsNullOrWhiteSpace(amountGroup))
+                throw new ArgumentException($"{label}: an 'amount' field mapping is required.");
+            if (p.DefaultType is not ("" or "DEBIT" or "CREDIT"))
+                throw new ArgumentException($"{label}: type must be DEBIT, CREDIT or empty.");
         }
-        if (!dto.FieldMappings.TryGetValue("amount", out var amountGroup) || string.IsNullOrWhiteSpace(amountGroup))
-            throw new ArgumentException("An 'amount' field mapping is required.");
+
+        var primary = patterns[0];
+        var patternsJson = JsonSerializer.Serialize(patterns, Json);
+        var primaryMappingsJson = JsonSerializer.Serialize(primary.FieldMappings, Json);
 
         BankSmsRule? rule = id.HasValue ? await _db.BankSmsRules.FirstOrDefaultAsync(r => r.Id == id.Value) : null;
         if (id.HasValue && rule == null) throw new KeyNotFoundException("Rule not found.");
@@ -214,8 +255,9 @@ public class SmsProcessingService : ISmsProcessingService
         var isNew = rule == null;
         rule ??= new BankSmsRule();
 
-        var changed = isNew || rule.Pattern != dto.Pattern ||
-                      rule.FieldMappings != JsonSerializer.Serialize(dto.FieldMappings, Json) ||
+        var changed = isNew || rule.Pattern != primary.Pattern ||
+                      rule.FieldMappings != primaryMappingsJson ||
+                      (rule.Patterns ?? string.Empty) != patternsJson ||
                       rule.DebitKeywords != dto.DebitKeywords || rule.CreditKeywords != dto.CreditKeywords ||
                       rule.DefaultType != dto.DefaultType || rule.DateFormats != dto.DateFormats ||
                       rule.SenderIds != dto.SenderIds || rule.DefaultCurrency != dto.DefaultCurrency;
@@ -224,14 +266,15 @@ public class SmsProcessingService : ISmsProcessingService
         rule.BankCode = string.IsNullOrWhiteSpace(dto.BankCode)
             ? rule.BankName.ToUpperInvariant().Replace(' ', '_') : dto.BankCode.Trim();
         rule.SenderIds = string.Join(",", SplitSenders(dto.SenderIds));
-        rule.Pattern = dto.Pattern;
-        rule.FieldMappings = JsonSerializer.Serialize(dto.FieldMappings, Json);
+        rule.Pattern = primary.Pattern;
+        rule.FieldMappings = primaryMappingsJson;
+        rule.SampleMessage = primary.SampleMessage;
+        rule.Patterns = patternsJson;
         rule.DebitKeywords = dto.DebitKeywords ?? string.Empty;
         rule.CreditKeywords = dto.CreditKeywords ?? string.Empty;
         rule.DefaultType = (dto.DefaultType ?? string.Empty).Trim().ToUpperInvariant();
         rule.DefaultCurrency = string.IsNullOrWhiteSpace(dto.DefaultCurrency) ? "OMR" : dto.DefaultCurrency.Trim().ToUpperInvariant();
         rule.DateFormats = dto.DateFormats ?? string.Empty;
-        rule.SampleMessage = dto.SampleMessage ?? string.Empty;
         rule.IsActive = dto.IsActive;
         rule.UpdatedAt = DateTimeOffset.UtcNow;
         rule.UpdatedBy = changedBy;
@@ -319,8 +362,8 @@ public class SmsProcessingService : ISmsProcessingService
                 SmsRuleTestResultDto? parsed = null;
                 foreach (var r in rules)
                 {
-                    var res = SmsParsingEngine.Run(ToDto(r), message, received);
-                    if (res.Matched) { used = r; parsed = res; break; }
+                    var (res, _) = SmsParsingEngine.RunAny(ToDto(r), message, received);
+                    if (res != null) { used = r; parsed = res; break; }
                 }
 
                 if (used == null || parsed?.Extracted == null)
@@ -415,12 +458,19 @@ public class SmsProcessingService : ISmsProcessingService
         Dictionary<string, string> map;
         try { map = JsonSerializer.Deserialize<Dictionary<string, string>>(r.FieldMappings, Json) ?? new(); }
         catch { map = new(); }
+
+        List<SmsPatternDto> patterns;
+        try { patterns = string.IsNullOrWhiteSpace(r.Patterns) ? new() : (JsonSerializer.Deserialize<List<SmsPatternDto>>(r.Patterns, Json) ?? new()); }
+        catch { patterns = new(); }
+        if (patterns.Count == 0)
+            patterns.Add(new SmsPatternDto { Name = string.Empty, SampleMessage = r.SampleMessage, Pattern = r.Pattern, FieldMappings = map, DefaultType = string.Empty });
+
         return new BankSmsRuleDto
         {
             Id = r.Id, BankName = r.BankName, BankCode = r.BankCode, SenderIds = r.SenderIds, Pattern = r.Pattern,
             FieldMappings = map, DebitKeywords = r.DebitKeywords, CreditKeywords = r.CreditKeywords,
             DefaultType = r.DefaultType, DefaultCurrency = r.DefaultCurrency, DateFormats = r.DateFormats,
-            SampleMessage = r.SampleMessage, IsActive = r.IsActive, Version = r.Version,
+            SampleMessage = r.SampleMessage, Patterns = patterns, IsActive = r.IsActive, Version = r.Version,
             UpdatedAt = r.UpdatedAt, UpdatedBy = r.UpdatedBy
         };
     }
@@ -431,6 +481,26 @@ public class SmsProcessingService : ISmsProcessingService
 
     private static bool SenderMatches(string csv, string sender) =>
         SplitSenders(csv).Any(s => string.Equals(s, sender, StringComparison.OrdinalIgnoreCase));
+
+    private static bool RuleMatchesBanks(BankSmsRule rule, List<string> banks)
+    {
+        if (banks == null || banks.Count == 0) return false;
+        var rName = (rule.BankName ?? string.Empty).Trim();
+        var rCode = (rule.BankCode ?? string.Empty).Trim();
+        foreach (var b in banks)
+        {
+            var token = b.Trim();
+            if (token.Length == 0) continue;
+            var tokenCode = token.ToUpperInvariant().Replace(' ', '_');
+            if (string.Equals(rName, token, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(rCode, token, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(rCode, tokenCode, StringComparison.OrdinalIgnoreCase) ||
+                (rName.Length > 0 && token.Contains(rName, StringComparison.OrdinalIgnoreCase)) ||
+                (rName.Length > 0 && rName.Contains(token, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+        return false;
+    }
 
     private static string Hash(Guid userId, string sender, string message)
     {

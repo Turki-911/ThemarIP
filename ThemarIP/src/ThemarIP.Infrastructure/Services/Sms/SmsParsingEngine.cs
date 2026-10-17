@@ -85,6 +85,42 @@ public static class SmsParsingEngine
         return result;
     }
 
+    /// <summary>
+    /// Tries every pattern grouped under the rule (in order) and returns the first match,
+    /// together with the pattern that matched. Returns (null, null) when nothing matches.
+    /// </summary>
+    public static (SmsRuleTestResultDto? Result, SmsPatternDto? Pattern) RunAny(BankSmsRuleDto rule, string message, DateTimeOffset? fallbackDate = null)
+    {
+        foreach (var p in EffectivePatterns(rule))
+        {
+            var res = Run(ForPattern(rule, p), message, fallbackDate);
+            if (res.Matched) return (res, p);
+        }
+        return (null, null);
+    }
+
+    /// <summary>The rule's pattern list, or its single legacy pattern when the list is empty.</summary>
+    public static List<SmsPatternDto> EffectivePatterns(BankSmsRuleDto rule)
+    {
+        var list = (rule.Patterns ?? new()).Where(p => !string.IsNullOrWhiteSpace(p.Pattern)).ToList();
+        if (list.Count > 0) return list;
+        return new List<SmsPatternDto>
+        {
+            new() { Name = string.Empty, Pattern = rule.Pattern, FieldMappings = rule.FieldMappings ?? new(), SampleMessage = rule.SampleMessage, DefaultType = string.Empty }
+        };
+    }
+
+    /// <summary>A single-pattern copy of the rule (bank-level keywords, currency and date formats are shared).</summary>
+    public static BankSmsRuleDto ForPattern(BankSmsRuleDto rule, SmsPatternDto p) => new()
+    {
+        Id = rule.Id, BankName = rule.BankName, BankCode = rule.BankCode, SenderIds = rule.SenderIds,
+        Pattern = p.Pattern, FieldMappings = p.FieldMappings ?? new(), SampleMessage = p.SampleMessage,
+        DebitKeywords = rule.DebitKeywords, CreditKeywords = rule.CreditKeywords,
+        DefaultType = string.IsNullOrWhiteSpace(p.DefaultType) ? rule.DefaultType : p.DefaultType,
+        DefaultCurrency = rule.DefaultCurrency, DateFormats = rule.DateFormats,
+        IsActive = rule.IsActive, Version = rule.Version
+    };
+
     /// <summary>Validation of an extraction. Returns error text or null if OK.</summary>
     public static string? Validate(SmsExtractedDto? ex)
     {

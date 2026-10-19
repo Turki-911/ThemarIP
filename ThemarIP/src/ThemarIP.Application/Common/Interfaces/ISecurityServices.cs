@@ -11,4 +11,5 @@ public interface IPasswordHasher
 public interface IJwtTokenGenerator
 {
     string GenerateToken(User user);
+    string GenerateLongLivedToken(User user, int days = 365);
 }

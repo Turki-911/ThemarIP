@@ -52,4 +52,40 @@ public class AuthController : ControllerBase
         var response = await _authService.SetAccountNumberAsync(userId, request, cancellationToken);
         return Ok(response);
     }
+
+    /// <summary>
+    /// Generate a persistent token and iOS Shortcuts setup config for the authenticated user
+    /// </summary>
+    [HttpGet("shortcuts-config")]
+    [Authorize]
+    public async Task<IActionResult> GetShortcutsConfig(
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IJwtTokenGenerator tokenGen)
+    {
+        if (!System.Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
+        var user = await context.Users.FindAsync(userId);
+        if (user == null) return NotFound("User not found.");
+
+        var token = tokenGen.GenerateLongLivedToken(user, 365);
+        return Ok(new
+        {
+            endpoint = "https://themarip-production.up.railway.app/api/sms/ingest",
+            apiKey = token,
+            userId = user.Id,
+            email = user.Email,
+            method = "POST",
+            headers = new
+            {
+                Authorization = $"Bearer {token}",
+                ContentType = "application/json"
+            },
+            bodyTemplate = new
+            {
+                sender = "Shortcut Input (Sender)",
+                message = "Shortcut Input (Message Content)"
+            }
+        });
+    }
 }

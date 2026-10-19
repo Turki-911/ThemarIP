@@ -48,4 +48,35 @@ public class JwtTokenGenerator : IJwtTokenGenerator
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    public string GenerateLongLivedToken(User user, int days = 365)
+    {
+        var secretKey = _configuration["JwtSettings:Secret"] ?? "ThemarIPSecretKeyForJWTAuthentication2026SuperSecureKey!";
+        var issuer = _configuration["JwtSettings:Issuer"] ?? "ThemarIP.API";
+        var audience = _configuration["JwtSettings:Audience"] ?? "ThemarIP.Client";
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.FullName),
+            new Claim(ClaimTypes.Role, user.Role.ToString()),
+            new Claim("scope", "ios_shortcuts"),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(days),
+            signingCredentials: credentials
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
 }

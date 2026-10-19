@@ -68,6 +68,11 @@ class ApiService {
     return user;
   }
 
+  Future<Map<String, dynamic>> getShortcutsConfig() async {
+    final response = await _dio.get('/auth/shortcuts-config');
+    return response.data as Map<String, dynamic>;
+  }
+
   // 2. Statements Services
   Future<StatementModel> uploadStatement(String fileName, int fileSize) async {
     final response = await _dio.post(

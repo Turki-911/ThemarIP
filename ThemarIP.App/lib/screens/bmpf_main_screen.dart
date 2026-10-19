@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import '../config/app_theme.dart';
 import '../models/bmpf_models.dart';
@@ -751,6 +752,200 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     );
   }
 
+  void _showIosShortcutsDialog() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF00E5FF)),
+      ),
+    );
+
+    Map<String, dynamic>? config;
+    try {
+      config = await ApiService().getShortcutsConfig();
+    } catch (e) {
+      debugPrint('Failed to load shortcuts config: $e');
+    }
+
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+
+    final endpoint = config?['endpoint']?.toString() ?? 'https://themarip-production.up.railway.app/api/sms/ingest';
+    final apiKey = config?['apiKey']?.toString() ?? (await AuthService.getToken() ?? '');
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF141A29),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: Color(0xFF28364F)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollController) => ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.bolt_rounded, color: Color(0xFF00E5FF), size: 24),
+                      SizedBox(width: 10),
+                      Text(
+                        'iOS SMS Shortcuts Setup',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Use Apple Shortcuts on iPhone to automatically forward your bank transaction SMS directly to Themar.',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 18),
+
+              // Step 1: Endpoint & API Key
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF1E293B)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('1. INGEST URL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF00E5FF), letterSpacing: 0.5)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            endpoint,
+                            style: const TextStyle(fontSize: 12, color: Colors.white, fontFamily: 'monospace'),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF00E5FF)),
+                          tooltip: 'Copy URL',
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: endpoint));
+                            _showToast('API Endpoint copied to clipboard!');
+                          },
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Color(0xFF1E293B), height: 16),
+                    const Text('2. YOUR USER API KEY (BEARER TOKEN)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF00E5FF), letterSpacing: 0.5)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            apiKey.isNotEmpty ? '${apiKey.substring(0, math.min(24, apiKey.length))}••••••••••••' : 'Sign in to generate key',
+                            style: const TextStyle(fontSize: 12, color: Colors.white, fontFamily: 'monospace'),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF00E5FF)),
+                          tooltip: 'Copy Token',
+                          onPressed: () {
+                            if (apiKey.isEmpty) return;
+                            Clipboard.setData(ClipboardData(text: apiKey));
+                            _showToast('API Key copied to clipboard!');
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Instructions in Shortcuts app
+              const Text(
+                'How to configure Shortcuts in 3 minutes:',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              _buildShortcutStep('1', 'Open "Shortcuts" App', 'Go to the "Automation" tab at the bottom and tap "+".'),
+              _buildShortcutStep('2', 'Select "Message" Trigger', 'Sender: Choose your bank (e.g. BankMuscat). Select "Run Immediately" and turn off "Notify When Run".'),
+              _buildShortcutStep('3', 'Add "Get Contents of URL"', 'Set Method to POST. Paste the Ingest URL above.'),
+              _buildShortcutStep('4', 'Add Headers & JSON Body', 'Headers:\n• Authorization: Bearer <Your API Key>\n• Content-Type: application/json\n\nRequest Body (JSON):\n• sender (Text) -> Choose "Sender" variable\n• message (Text) -> Choose "Shortcut Input" (Message)'),
+              const SizedBox(height: 20),
+
+              ElevatedButton.icon(
+                onPressed: () {
+                  final shortcutTemplate = 'URL: $endpoint\nMethod: POST\nHeader: Authorization: Bearer $apiKey\nHeader: Content-Type: application/json\nJSON Body:\n{\n  "sender": "<Bank Sender>",\n  "message": "<SMS Body Text>"\n}';
+                  Clipboard.setData(ClipboardData(text: shortcutTemplate));
+                  _showToast('Full Shortcut configuration copied!');
+                },
+                icon: const Icon(Icons.content_copy_rounded, size: 18),
+                label: const Text('Copy Complete Shortcut Template', style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00E5FF),
+                  foregroundColor: const Color(0xFF0A0E1A),
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutStep(String num, String title, String desc) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: const BoxDecoration(color: Color(0xFF00E5FF), shape: BoxShape.circle),
+            child: Center(
+              child: Text(
+                num,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 2),
+                Text(desc, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), height: 1.35)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ============================================================
   // FLOATING BOTTOM NAVIGATION BAR (COMPACT CAPSULE MATCHING IMAGE 2)
   // ============================================================
@@ -1119,6 +1314,70 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               ],
             ),
           ),
+        const SizedBox(height: 24),
+
+        // iOS Shortcuts Automation Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF131B2E),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.bolt_rounded, size: 20, color: Color(0xFF00E5FF)),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'iOS SMS Automation (Shortcuts)',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        Text(
+                          'Forward incoming bank SMS to Themar automatically',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'iPhone users can use Apple Shortcuts Automation to read bank SMS and send them securely to Themar, just like Android.',
+                style: TextStyle(fontSize: 12, color: Color(0xFFCBD5E1), height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _showIosShortcutsDialog,
+                  icon: const Icon(Icons.settings_suggest_rounded, size: 18),
+                  label: const Text('Setup iOS Shortcuts', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00E5FF),
+                    foregroundColor: const Color(0xFF0A0E1A),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 24),
 
         // CBO Compliance & Security Card

@@ -14,9 +14,13 @@ public class SmsController : ControllerBase
     private readonly ISmsProcessingService _sms;
     public SmsController(ISmsProcessingService sms) => _sms = sms;
 
-    /// <summary>Sender IDs the device should forward. Messages from any other sender never leave the phone.</summary>
+    /// <summary>Sender IDs the device should forward — only for the banks this user selected. Messages from any other sender never leave the phone.</summary>
     [HttpGet("senders")]
-    public async Task<IActionResult> Senders() => Ok(await _sms.GetActiveSenderIdsAsync());
+    public async Task<IActionResult> Senders()
+    {
+        Guid? userId = Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : null;
+        return Ok(await _sms.GetActiveSenderIdsAsync(userId));
+    }
 
     [HttpPost("ingest")]
     public async Task<IActionResult> Ingest([FromBody] SmsIngestRequestDto dto)

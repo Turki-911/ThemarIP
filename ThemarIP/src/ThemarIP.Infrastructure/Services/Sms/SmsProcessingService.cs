@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using ThemarIP.Application.Common;
 using ThemarIP.Application.Common.Interfaces;
 using ThemarIP.Application.DTOs.Sms;
 using ThemarIP.Application.DTOs.Statements;
@@ -62,29 +63,28 @@ public class SmsProcessingService : ISmsProcessingService
 
             // Link user's selected bank(s) (supports multi-bank selection in user.AccountNumber)
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
-            var userBanks = SplitSenders(user?.AccountNumber ?? string.Empty);
+            var selection = BankCatalog.ParseSelection(user?.AccountNumber);
+            if (selection.Count == 0)
+                return await Finish(entry, "NoRule", "No bank selected by user.");
 
             var allRules = await _db.BankSmsRules.ToListAsync();
-            var autoActivated = false;
-            if (userBanks.Count > 0)
-            {
-                foreach (var r in allRules.Where(r => !r.IsActive && RuleMatchesBanks(r, userBanks)))
-                {
-                    r.IsActive = true;
-                    r.UpdatedAt = DateTimeOffset.UtcNow;
-                    autoActivated = true;
-                }
-                if (autoActivated) await _db.SaveChangesAsync();
-            }
+            var userRules = allRules.Where(r => BankCatalog.IsSelected(r.BankCode, r.BankName, selection)).ToList();
 
-            var rules = allRules
+            // Rules are enabled when the user selects the bank (StatementsController.SaveUserBankSelection).
+            // Here we respect the admin's Active switch so a paused rule stays paused.
+            // Only rules of the user's selected banks are considered — never other banks' rules.
+            var rules = userRules
                 .Where(r => r.IsActive && SenderMatches(r.SenderIds, sender))
-                .OrderByDescending(r => userBanks.Count > 0 && RuleMatchesBanks(r, userBanks) ? 1 : 0)
-                .ThenByDescending(r => r.UpdatedAt)
+                .OrderByDescending(r => r.UpdatedAt)
                 .ToList();
 
             if (rules.Count == 0)
-                return await Finish(entry, "NoRule", $"No active rule for sender '{sender}'.");
+            {
+                var otherBank = allRules.Any(r => r.IsActive && SenderMatches(r.SenderIds, sender));
+                return await Finish(entry, "NoRule", otherBank
+                    ? $"Sender '{sender}' belongs to a bank not selected by user."
+                    : $"No active rule for sender '{sender}'.");
+            }
 
             BankSmsRule? used = null;
             SmsRuleTestResultDto? parsed = null;
@@ -120,7 +120,7 @@ public class SmsProcessingService : ISmsProcessingService
                 UserId = userId,
                 Transaction = new ParsedNotificationResultDto
                 {
-                    BankName = used.BankName,
+                    BankName = BankCatalog.Canonical(used.BankCode, used.BankName).Name,
                     SourceType = "SMS",
                     Amount = ex.Amount,
                     Currency = ex.Currency,
@@ -136,8 +136,9 @@ public class SmsProcessingService : ISmsProcessingService
             var tx = await _db.PfmTransactions.FirstOrDefaultAsync(t => t.Id == txId);
             if (tx != null)
             {
-                tx.BankName = used.BankName;
-                if (!string.IsNullOrWhiteSpace(used.BankCode)) tx.BankCode = used.BankCode;
+                var bank = BankCatalog.Canonical(used.BankCode, used.BankName);
+                tx.BankName = bank.Name;
+                tx.BankCode = bank.Code;
                 await _db.SaveChangesAsync();
             }
 
@@ -197,10 +198,16 @@ public class SmsProcessingService : ISmsProcessingService
 
     // ───────────────────────── Senders / test ─────────────────────────
 
-    public async Task<List<string>> GetActiveSenderIdsAsync()
+    public async Task<List<string>> GetActiveSenderIdsAsync(Guid? userId = null)
     {
-        var all = await _db.BankSmsRules.Where(r => r.IsActive).Select(r => r.SenderIds).ToListAsync();
-        return all.SelectMany(SplitSenders).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList();
+        var rules = await _db.BankSmsRules.Where(r => r.IsActive).ToListAsync();
+        if (userId.HasValue)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
+            var selection = BankCatalog.ParseSelection(user?.AccountNumber);
+            rules = rules.Where(r => BankCatalog.IsSelected(r.BankCode, r.BankName, selection)).ToList();
+        }
+        return rules.Select(r => r.SenderIds).SelectMany(SplitSenders).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList();
     }
 
     public SmsRuleTestResultDto Test(SmsRuleTestRequestDto request) =>
@@ -262,9 +269,9 @@ public class SmsProcessingService : ISmsProcessingService
                       rule.DefaultType != dto.DefaultType || rule.DateFormats != dto.DateFormats ||
                       rule.SenderIds != dto.SenderIds || rule.DefaultCurrency != dto.DefaultCurrency;
 
-        rule.BankName = dto.BankName.Trim();
-        rule.BankCode = string.IsNullOrWhiteSpace(dto.BankCode)
-            ? rule.BankName.ToUpperInvariant().Replace(' ', '_') : dto.BankCode.Trim();
+        var canonicalBank = BankCatalog.Canonical(dto.BankCode, dto.BankName);
+        rule.BankName = canonicalBank.Name;
+        rule.BankCode = canonicalBank.Code;
         rule.SenderIds = string.Join(",", SplitSenders(dto.SenderIds));
         rule.Pattern = primary.Pattern;
         rule.FieldMappings = primaryMappingsJson;
@@ -406,7 +413,7 @@ public class SmsProcessingService : ISmsProcessingService
                     UserId = entry.UserId,
                     Transaction = new ParsedNotificationResultDto
                     {
-                        BankName = used.BankName,
+                        BankName = BankCatalog.Canonical(used.BankCode, used.BankName).Name,
                         SourceType = "SMS",
                         Amount = ex.Amount,
                         Currency = ex.Currency,
@@ -421,8 +428,9 @@ public class SmsProcessingService : ISmsProcessingService
                 var tx = await _db.PfmTransactions.FirstOrDefaultAsync(t => t.Id == txId);
                 if (tx != null)
                 {
-                    tx.BankName = used.BankName;
-                    if (!string.IsNullOrWhiteSpace(used.BankCode)) tx.BankCode = used.BankCode;
+                    var bank = BankCatalog.Canonical(used.BankCode, used.BankName);
+                    tx.BankName = bank.Name;
+                    tx.BankCode = bank.Code;
                     await _db.SaveChangesAsync();
                 }
 

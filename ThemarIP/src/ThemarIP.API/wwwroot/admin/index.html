@@ -1166,21 +1166,20 @@
       <div class="form-row">
         <div class="form-group" style="flex:2;">
           <label class="form-label">Bank * <span style="color:var(--text-dim);font-weight:400;">(linked to App Bank Selection)</span></label>
-          <input type="text" id="sms-form-bank" list="sms-app-banks" class="form-control" placeholder="e.g. Bank Muscat">
-          <datalist id="sms-app-banks">
-            <option value="Bank Muscat"></option>
-            <option value="National Bank of Oman"></option>
-            <option value="Bank Dhofar"></option>
-            <option value="Oman Arab Bank"></option>
-            <option value="Sohar International"></option>
-            <option value="Ahli Bank Oman"></option>
-            <option value="Bank Nizwa"></option>
-            <option value="Alizz Islamic Bank"></option>
-          </datalist>
+          <select id="sms-form-bank" class="form-control">
+            <option value="Bank Muscat">Bank Muscat</option>
+            <option value="National Bank of Oman">National Bank of Oman</option>
+            <option value="Bank Dhofar">Bank Dhofar</option>
+            <option value="Oman Arab Bank">Oman Arab Bank</option>
+            <option value="Sohar International">Sohar International</option>
+            <option value="Ahli Bank Oman">Ahli Bank Oman</option>
+            <option value="Bank Nizwa">Bank Nizwa</option>
+            <option value="Alizz Islamic Bank">Alizz Islamic Bank</option>
+          </select>
         </div>
         <div class="form-group" style="flex:1;">
           <label class="form-label">Bank code</label>
-          <input type="text" id="sms-form-bankcode" class="form-control" placeholder="auto (BANK_MUSCAT)">
+          <input type="text" id="sms-form-bankcode" class="form-control" placeholder="auto (BANK_MUSCAT)" readonly>
         </div>
         <div class="form-group" style="flex:1;">
           <label class="form-label">Status</label>
@@ -1255,7 +1254,7 @@
 <!-- ============================================================ -->
 <div id="toast-container" class="toast-container"></div>
 
-<script src="app.js?v=20261017b"></script>
-<script src="sms-config.js?v=20261017b"></script>
+<script src="app.js?v=20261019a"></script>
+<script src="sms-config.js?v=20261019a"></script>
 </body>
 </html>

@@ -334,9 +334,11 @@ const SmsConfig = {
     const r = id ? SmsConfig._rules.find(x => x.id === id) : null;
     const ver = r && r.version >= 1 ? r.version : 1;
     document.getElementById('sms-modal-title').textContent = r ? `Edit ${r.bankName} (v${ver})` : 'New Bank SMS Rule (v1)';
+    const defaultBank = r?.bankName || 'Bank Muscat';
+    const defaultCode = r?.bankCode || SmsConfig.APP_BANK_CODES[defaultBank.toLowerCase()] || 'BANK_MUSCAT';
     SmsConfig._set('sms-form-id', r?.id || '');
-    SmsConfig._set('sms-form-bank', r?.bankName || '');
-    SmsConfig._set('sms-form-bankcode', r?.bankCode || '');
+    SmsConfig._set('sms-form-bank', defaultBank);
+    SmsConfig._set('sms-form-bankcode', defaultCode);
     SmsConfig._set('sms-form-active', String(r ? r.isActive : true));
     SmsConfig._set('sms-form-senders', r?.senderIds || '');
     SmsConfig._set('sms-form-debit', r ? r.debitKeywords : 'used,debited,withdrawn,purchase,spent,paid');
@@ -513,11 +515,13 @@ const SmsConfig = {
 
     const bankInput = document.getElementById('sms-form-bank');
     if (bankInput) {
-      bankInput.addEventListener('input', () => {
+      const updateBankCode = () => {
         const codeEl = document.getElementById('sms-form-bankcode');
         const mapped = SmsConfig.APP_BANK_CODES[bankInput.value.trim().toLowerCase()];
         if (codeEl && mapped) codeEl.value = mapped;
-      });
+      };
+      bankInput.addEventListener('change', updateBankCode);
+      bankInput.addEventListener('input', updateBankCode);
     }
   },
 };

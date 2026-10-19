@@ -108,7 +108,7 @@ public class SmsReprocessResultDto
 public interface ISmsProcessingService
 {
     Task<SmsIngestResultDto> IngestAsync(Guid userId, SmsIngestRequestDto request);
-    Task<List<string>> GetActiveSenderIdsAsync();
+    Task<List<string>> GetActiveSenderIdsAsync(Guid? userId = null);
     SmsRuleTestResultDto Test(SmsRuleTestRequestDto request);
     Task<List<BankSmsRuleDto>> ListRulesAsync();
     Task<BankSmsRuleDto> SaveRuleAsync(Guid? id, BankSmsRuleDto dto, string? changedBy);

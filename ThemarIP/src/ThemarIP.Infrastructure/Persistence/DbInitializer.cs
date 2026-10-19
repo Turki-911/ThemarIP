@@ -22,6 +22,21 @@ public static class DbInitializer
             // Column already exists
         }
 
+        // Normalize any legacy SMS rule/pattern names stored on PfmTransactions to the canonical BankName & BankCode
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"
+                UPDATE PfmTransactions
+                SET BankName = 'Bank Muscat', BankCode = 'BANK_MUSCAT'
+                WHERE (BankName LIKE 'Bank Muscat%' OR BankName LIKE 'BM-%' OR BankCode LIKE 'BANK_MUSCAT%' OR BankCode LIKE 'BM-%')
+                  AND (BankName != 'Bank Muscat' OR BankCode != 'BANK_MUSCAT');
+            ");
+        }
+        catch
+        {
+            // Ignore if table not yet created
+        }
+
         if (!await context.Users.AnyAsync())
         {
             // Seed 1 Admin User

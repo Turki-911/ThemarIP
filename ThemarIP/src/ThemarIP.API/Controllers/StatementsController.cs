@@ -86,8 +86,14 @@ public class StatementsController : ControllerBase
             .GroupBy(t => t.UserId)
             .ToDictionary(
                 g => g.Key,
-                g => g.GroupBy(x => new { Code = x.BankCode ?? "BANK_MUSCAT", Name = x.BankName ?? "Bank Muscat" })
-                      .Select(bg => new UserBankSummaryDto { Code = bg.Key.Code, Name = bg.Key.Name, TxCount = bg.Count() })
+                g => g.Select(x => ThemarIP.Application.Common.BankCatalog.Canonical(x.BankCode, x.BankName))
+                      .GroupBy(b => b.Code, StringComparer.OrdinalIgnoreCase)
+                      .Select(bg => new UserBankSummaryDto
+                      {
+                          Code = bg.First().Code,
+                          Name = bg.First().Name,
+                          TxCount = bg.Count()
+                      })
                       .ToList()
             );
 
@@ -96,17 +102,20 @@ public class StatementsController : ControllerBase
             txByUser.TryGetValue(u.Id, out var userBanks);
             userBanks ??= new List<UserBankSummaryDto>();
 
-            var selectedList = (u.AccountNumber ?? string.Empty)
-                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var parsedSelection = ThemarIP.Application.Common.BankCatalog.ParseSelection(u.AccountNumber);
+            var selectedList = parsedSelection.Select(b => b.Name).ToList();
 
-            var connectedBanks = userBanks.Select(b => b.Name).ToList();
-            foreach (var sb in selectedList)
+            // Merge selected banks with 0 transactions into userBanks so the admin sees all selected banks cleanly
+            foreach (var sb in parsedSelection)
             {
-                if (!connectedBanks.Any(b => string.Equals(b, sb, StringComparison.OrdinalIgnoreCase)))
-                    connectedBanks.Add(sb);
+                if (!userBanks.Any(b => string.Equals(b.Code, sb.Code, StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(b.Name, sb.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    userBanks.Add(new UserBankSummaryDto { Code = sb.Code, Name = sb.Name, TxCount = 0 });
+                }
             }
+
+            var connectedBanks = userBanks.Select(b => b.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var primaryBank = selectedList.Count > 0 ? string.Join(", ", selectedList) : userBanks.FirstOrDefault()?.Name;
             var totalTx = userBanks.Sum(b => b.TxCount);
 
@@ -115,7 +124,7 @@ public class StatementsController : ControllerBase
                 id = u.Id,
                 email = u.Email,
                 fullName = u.FullName,
-                accountNumber = u.AccountNumber,
+                accountNumber = primaryBank ?? u.AccountNumber,
                 selectedBanks = selectedList,
                 banks = userBanks,
                 connectedBanks = connectedBanks,
@@ -164,7 +173,8 @@ public class StatementsController : ControllerBase
 
         if (dto.PrimaryBank != null)
         {
-            user.AccountNumber = dto.PrimaryBank.Trim();
+            var canonicalBanks = ThemarIP.Application.Common.BankCatalog.ParseSelection(dto.PrimaryBank);
+            user.AccountNumber = string.Join(", ", canonicalBanks.Select(b => b.Name));
             await AutoEnableBankSmsRulesAsync(context, user.AccountNumber, null);
         }
 
@@ -259,11 +269,12 @@ public class StatementsController : ControllerBase
             return NotFound(new { message = "User not found to associate bank selection." });
         }
 
-        string bankDisplayName = !string.IsNullOrWhiteSpace(dto.BankName) ? dto.BankName.Trim() : (dto.BankCode ?? "Unknown Bank");
+        var canonicalPicked = ThemarIP.Application.Common.BankCatalog.Canonical(dto.BankCode, dto.BankName);
+        string bankDisplayName = canonicalPicked.Name;
 
-        // Multi-bank support: append new bank selection without overwriting existing selections
-        var existingBanks = (user.AccountNumber ?? string.Empty)
-            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        // Multi-bank support: append canonical bank name without overwriting existing selections
+        var existingBanks = ThemarIP.Application.Common.BankCatalog.ParseSelection(user.AccountNumber)
+            .Select(b => b.Name)
             .ToList();
         if (!existingBanks.Any(b => string.Equals(b, bankDisplayName, StringComparison.OrdinalIgnoreCase)))
         {
@@ -272,7 +283,7 @@ public class StatementsController : ControllerBase
         user.AccountNumber = string.Join(", ", existingBanks);
 
         // Auto-enable matching Bank SMS Rule(s) for all selected banks
-        var enabledRules = await AutoEnableBankSmsRulesAsync(context, user.AccountNumber, dto.BankCode);
+        var enabledRules = await AutoEnableBankSmsRulesAsync(context, user.AccountNumber, canonicalPicked.Code);
 
         // If trust score is 0, give initial baseline score of 75 upon bank connection
         if (user.TrustScore == 0)
@@ -302,34 +313,28 @@ public class StatementsController : ControllerBase
         string? bankCode)
     {
         var enabledNames = new List<string>();
-        var tokens = (bankNamesCsv ?? string.Empty)
-            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-        if (!string.IsNullOrWhiteSpace(bankCode)) tokens.Add(bankCode.Trim());
-        if (tokens.Count == 0) return enabledNames;
+        var selection = ThemarIP.Application.Common.BankCatalog.ParseSelection(bankNamesCsv);
+        if (!string.IsNullOrWhiteSpace(bankCode))
+        {
+            var extra = ThemarIP.Application.Common.BankCatalog.Canonical(bankCode, null);
+            if (!selection.Any(s => string.Equals(s.Code, extra.Code, StringComparison.OrdinalIgnoreCase)))
+                selection.Add(extra);
+        }
+        if (selection.Count == 0) return enabledNames;
 
         var allRules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.BankSmsRules);
         foreach (var r in allRules)
         {
-            var rName = (r.BankName ?? string.Empty).Trim();
-            var rCode = (r.BankCode ?? string.Empty).Trim();
-            var matched = tokens.Any(t =>
-            {
-                var tCode = t.ToUpperInvariant().Replace(' ', '_');
-                return string.Equals(rName, t, StringComparison.OrdinalIgnoreCase) ||
-                       string.Equals(rCode, t, StringComparison.OrdinalIgnoreCase) ||
-                       string.Equals(rCode, tCode, StringComparison.OrdinalIgnoreCase) ||
-                       (rName.Length > 0 && t.Contains(rName, StringComparison.OrdinalIgnoreCase)) ||
-                       (rName.Length > 0 && rName.Contains(t, StringComparison.OrdinalIgnoreCase));
-            });
-            if (matched)
+            if (ThemarIP.Application.Common.BankCatalog.IsSelected(r.BankCode, r.BankName, selection))
             {
                 if (!r.IsActive)
                 {
                     r.IsActive = true;
                     r.UpdatedAt = System.DateTimeOffset.UtcNow;
                 }
-                enabledNames.Add(r.BankName);
+                var canonical = ThemarIP.Application.Common.BankCatalog.Canonical(r.BankCode, r.BankName);
+                if (!enabledNames.Contains(canonical.Name, StringComparer.OrdinalIgnoreCase))
+                    enabledNames.Add(canonical.Name);
             }
         }
         return enabledNames;
@@ -1088,22 +1093,50 @@ public class StatementsController : ControllerBase
         [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
     {
         var txQuery = context.PfmTransactions.AsQueryable();
+        ThemarIP.Domain.Entities.User? user = null;
         if (userId.HasValue)
         {
             txQuery = txQuery.Where(t => t.UserId == userId.Value);
+            user = await context.Users.FindAsync(userId.Value);
         }
 
         var txList = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(txQuery);
-        var banks = txList
-            .GroupBy(t => new { Code = t.BankCode ?? "BANK_MUSCAT", Name = t.BankName ?? "Bank Muscat" })
-            .Select(g => new
+        var grouped = txList
+            .Select(t => new { Canonical = ThemarIP.Application.Common.BankCatalog.Canonical(t.BankCode, t.BankName), Tx = t })
+            .GroupBy(x => x.Canonical.Code, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => new
+                {
+                    bankCode = g.First().Canonical.Code,
+                    bankName = g.First().Canonical.Name,
+                    txCount = g.Count(),
+                    totalSpent = g.Where(x => x.Tx.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Debit).Sum(x => x.Tx.Amount)
+                },
+                StringComparer.OrdinalIgnoreCase
+            );
+
+        if (user != null)
+        {
+            var selected = ThemarIP.Application.Common.BankCatalog.ParseSelection(user.AccountNumber);
+            foreach (var sb in selected)
             {
-                bankCode = g.Key.Code,
-                bankName = g.Key.Name,
-                txCount = g.Count(),
-                totalSpent = g.Where(t => t.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Debit).Sum(t => t.Amount)
-            })
+                if (!grouped.ContainsKey(sb.Code))
+                {
+                    grouped[sb.Code] = new
+                    {
+                        bankCode = sb.Code,
+                        bankName = sb.Name,
+                        txCount = 0,
+                        totalSpent = 0m
+                    };
+                }
+            }
+        }
+
+        var banks = grouped.Values
             .OrderByDescending(b => b.txCount)
+            .ThenBy(b => b.bankName)
             .ToList();
 
         return Ok(banks);

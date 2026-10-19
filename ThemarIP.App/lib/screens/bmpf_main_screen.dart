@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import '../config/app_theme.dart';
 import '../models/bmpf_models.dart';
@@ -1314,70 +1315,72 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               ],
             ),
           ),
-        const SizedBox(height: 24),
+        if (defaultTargetPlatform != TargetPlatform.android) ...[
+          const SizedBox(height: 24),
 
-        // iOS Shortcuts Automation Card
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF131B2E),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
+          // iOS Shortcuts Automation Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131B2E),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.bolt_rounded, size: 20, color: Color(0xFF00E5FF)),
                     ),
-                    child: const Icon(Icons.bolt_rounded, size: 20, color: Color(0xFF00E5FF)),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'iOS SMS Automation (Shortcuts)',
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                        Text(
-                          'Forward incoming bank SMS to Themar automatically',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                        ),
-                      ],
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'iOS SMS Automation (Shortcuts)',
+                            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          Text(
+                            'Forward incoming bank SMS to Themar automatically',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'iPhone users can use Apple Shortcuts Automation to read bank SMS and send them securely to Themar, just like Android.',
-                style: TextStyle(fontSize: 12, color: Color(0xFFCBD5E1), height: 1.4),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _showIosShortcutsDialog,
-                  icon: const Icon(Icons.settings_suggest_rounded, size: 18),
-                  label: const Text('Setup iOS Shortcuts', style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E5FF),
-                    foregroundColor: const Color(0xFF0A0E1A),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'iPhone users can use Apple Shortcuts Automation to read bank SMS and send them securely to Themar, just like Android.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFFCBD5E1), height: 1.4),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _showIosShortcutsDialog,
+                    icon: const Icon(Icons.settings_suggest_rounded, size: 18),
+                    label: const Text('Setup iOS Shortcuts', style: TextStyle(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00E5FF),
+                      foregroundColor: const Color(0xFF0A0E1A),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: 24),
 
         // CBO Compliance & Security Card

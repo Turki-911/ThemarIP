@@ -115,7 +115,9 @@ public static class SmsParsingEngine
     {
         Id = rule.Id, BankName = rule.BankName, BankCode = rule.BankCode, SenderIds = rule.SenderIds,
         Pattern = p.Pattern, FieldMappings = p.FieldMappings ?? new(), SampleMessage = p.SampleMessage,
-        DebitKeywords = rule.DebitKeywords, CreditKeywords = rule.CreditKeywords,
+        // When a pattern explicitly declares DEBIT or CREDIT, honour that direction instead of letting general keywords override it.
+        DebitKeywords = !string.IsNullOrWhiteSpace(p.DefaultType) ? string.Empty : rule.DebitKeywords,
+        CreditKeywords = !string.IsNullOrWhiteSpace(p.DefaultType) ? string.Empty : rule.CreditKeywords,
         DefaultType = string.IsNullOrWhiteSpace(p.DefaultType) ? rule.DefaultType : p.DefaultType,
         DefaultCurrency = rule.DefaultCurrency, DateFormats = rule.DateFormats,
         IsActive = rule.IsActive, Version = rule.Version
@@ -133,6 +135,13 @@ public static class SmsParsingEngine
 
     private static string ResolveType(BankSmsRuleDto rule, string source)
     {
+        // High-confidence Bank Muscat / Oman bank phrases win first if no explicit pattern type is locked.
+        if (string.IsNullOrWhiteSpace(rule.DebitKeywords) && string.IsNullOrWhiteSpace(rule.CreditKeywords))
+        {
+            var explicitDef = (rule.DefaultType ?? string.Empty).Trim().ToUpperInvariant();
+            if (explicitDef is "DEBIT" or "CREDIT") return explicitDef;
+        }
+
         // The earliest keyword in the text wins when both debit and credit words appear.
         var d = FirstIndex(rule.DebitKeywords, source);
         var c = FirstIndex(rule.CreditKeywords, source);

@@ -30,6 +30,10 @@ public static class DbInitializer
                 SET BankName = 'Bank Muscat', BankCode = 'BANK_MUSCAT'
                 WHERE (BankName LIKE 'Bank Muscat%' OR BankName LIKE 'BM-%' OR BankCode LIKE 'BANK_MUSCAT%' OR BankCode LIKE 'BM-%')
                   AND (BankName != 'Bank Muscat' OR BankCode != 'BANK_MUSCAT');
+
+                UPDATE PfmTransactions
+                SET TransactionType = 'Credit'
+                WHERE Narration LIKE '%has been credited%' AND Narration NOT LIKE '%is debited%' AND TransactionType != 'Credit';
             ");
         }
         catch

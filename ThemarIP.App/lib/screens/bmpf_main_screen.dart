@@ -2762,7 +2762,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '-${activeAmount.toStringAsFixed(3)} OMR',
+                        '${activeCat != null && activeCat.name.toLowerCase() == 'income' ? '+' : '-'}${activeAmount.toStringAsFixed(3)} OMR',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: activeColor),
                       ),
                       const SizedBox(width: 6),
@@ -3068,6 +3068,10 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                         const SizedBox(height: 8),
                         ...node.transactions.map((tx) {
                           final bankDef = _findBankByCode(tx.bankCode);
+                          final isCredit = tx.direction.toUpperCase() == 'CREDIT' ||
+                              node.name.toLowerCase() == 'income' ||
+                              (tx.narration.toLowerCase().contains('has been credited') &&
+                                  !tx.narration.toLowerCase().contains('is debited'));
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 5),
                             child: Row(
@@ -3114,8 +3118,12 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '-${tx.amount.toStringAsFixed(3)} OMR',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFEF4444)),
+                                  '${isCredit ? '+' : '-'}${tx.amount.toStringAsFixed(3)} OMR',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: isCredit ? const Color(0xFF34D399) : const Color(0xFFEF4444),
+                                  ),
                                 ),
                               ],
                             ),

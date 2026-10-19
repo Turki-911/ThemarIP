@@ -985,6 +985,10 @@ public class StatementsController : ControllerBase
                     if (counts.ContainsKey(targetCatName)) counts[targetCatName]++;
                     else counts["Other"]++;
 
+                    bool isCreditTx = tx.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Credit
+                        || string.Equals(targetCatName, "Income", System.StringComparison.OrdinalIgnoreCase)
+                        || (narration.Contains("HAS BEEN CREDITED") && !narration.Contains("IS DEBITED"));
+
                     var txItem = new
                     {
                         id = tx.Id,
@@ -992,7 +996,8 @@ public class StatementsController : ControllerBase
                         narration = tx.Narration,
                         amount = tx.Amount,
                         currency = tx.Currency,
-                        transactionType = tx.TransactionType.ToString(),
+                        transactionType = isCreditTx ? "Credit" : tx.TransactionType.ToString(),
+                        direction = isCreditTx ? "CREDIT" : "DEBIT",
                         balanceAfter = tx.BalanceAfter,
                         matchedKeyword = merchant.Name,
                         subcategory = subName,
@@ -1024,6 +1029,10 @@ public class StatementsController : ControllerBase
                         if (counts.ContainsKey(catName)) counts[catName]++;
                         else counts["Other"]++;
 
+                        bool isCreditTx = tx.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Credit
+                            || string.Equals(catName, "Income", System.StringComparison.OrdinalIgnoreCase)
+                            || (narration.Contains("HAS BEEN CREDITED") && !narration.Contains("IS DEBITED"));
+
                         var txItem = new
                         {
                             id = tx.Id,
@@ -1031,7 +1040,8 @@ public class StatementsController : ControllerBase
                             narration = tx.Narration,
                             amount = tx.Amount,
                             currency = tx.Currency,
-                            transactionType = tx.TransactionType.ToString(),
+                            transactionType = isCreditTx ? "Credit" : tx.TransactionType.ToString(),
+                            direction = isCreditTx ? "CREDIT" : "DEBIT",
                             balanceAfter = tx.BalanceAfter,
                             matchedKeyword = rule.Keyword,
                             subcategory = rule.Category,
@@ -1051,18 +1061,23 @@ public class StatementsController : ControllerBase
             // 3. Fallback: Uncategorized
             if (!matched)
             {
-                counts["Other"]++;
-                catTxns["Other"].Add(new
+                bool isCreditTx = tx.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Credit
+                    || (narration.Contains("HAS BEEN CREDITED") && !narration.Contains("IS DEBITED"))
+                    || (narration.Contains("RECEIVED") && narration.Contains("FROM"));
+                string fallbackCat = isCreditTx && catTxns.ContainsKey("Income") ? "Income" : "Other";
+                counts[fallbackCat]++;
+                catTxns[fallbackCat].Add(new
                 {
                     id = tx.Id,
                     transactionDate = tx.TransactionDate,
                     narration = tx.Narration,
                     amount = tx.Amount,
                     currency = tx.Currency,
-                    transactionType = tx.TransactionType.ToString(),
+                    transactionType = isCreditTx ? "Credit" : tx.TransactionType.ToString(),
+                    direction = isCreditTx ? "CREDIT" : "DEBIT",
                     balanceAfter = tx.BalanceAfter,
                     matchedKeyword = "",
-                    subcategory = "Uncategorized",
+                    subcategory = isCreditTx ? "Deposit" : "Uncategorized",
                     bankCode = tx.BankCode,
                     bankName = tx.BankName
                 });

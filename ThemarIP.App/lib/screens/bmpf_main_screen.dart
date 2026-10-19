@@ -772,8 +772,9 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pop();
 
-    final endpoint = config?['endpoint']?.toString() ?? 'https://themarip-production.up.railway.app/api/sms/ingest';
+    final endpoint = config?['endpoint']?.toString() ?? 'https://themarip.up.railway.app/api/sms/ingest';
     final apiKey = config?['apiKey']?.toString() ?? (await AuthService.getToken() ?? '');
+    final bearerToken = config?['bearerToken']?.toString() ?? (apiKey.isNotEmpty ? 'Bearer $apiKey' : '');
 
     if (!mounted) return;
 
@@ -853,23 +854,23 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                       ],
                     ),
                     const Divider(color: Color(0xFF1E293B), height: 16),
-                    const Text('2. YOUR USER API KEY (BEARER TOKEN)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF00E5FF), letterSpacing: 0.5)),
+                    const Text('2. AUTHORIZATION HEADER VALUE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF00E5FF), letterSpacing: 0.5)),
                     const SizedBox(height: 6),
                     Row(
                       children: [
                         Expanded(
                           child: Text(
-                            apiKey.isNotEmpty ? '${apiKey.substring(0, math.min(24, apiKey.length))}••••••••••••' : 'Sign in to generate key',
+                            apiKey.isNotEmpty ? 'Bearer ${apiKey.substring(0, math.min(16, apiKey.length))}••••••••' : 'Sign in to generate key',
                             style: const TextStyle(fontSize: 12, color: Colors.white, fontFamily: 'monospace'),
                           ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF00E5FF)),
-                          tooltip: 'Copy Token',
+                          tooltip: 'Copy Bearer Token',
                           onPressed: () {
                             if (apiKey.isEmpty) return;
-                            Clipboard.setData(ClipboardData(text: apiKey));
-                            _showToast('API Key copied to clipboard!');
+                            Clipboard.setData(ClipboardData(text: bearerToken));
+                            _showToast('Authorization header copied (with Bearer)!');
                           },
                         ),
                       ],

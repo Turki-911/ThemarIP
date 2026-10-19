@@ -116,6 +116,40 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = audience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
     };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(authHeader))
+            {
+                if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Token = authHeader.Substring("Bearer ".Length).Trim();
+                }
+                else
+                {
+                    context.Token = authHeader.Trim();
+                }
+            }
+
+            if (string.IsNullOrEmpty(context.Token))
+            {
+                var apiKeyHeader = context.Request.Headers["X-API-Key"].FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(apiKeyHeader))
+                {
+                    context.Token = apiKeyHeader.Trim();
+                }
+                else if (context.Request.Query.TryGetValue("token", out var queryToken))
+                {
+                    context.Token = queryToken.FirstOrDefault()?.Trim();
+                }
+            }
+
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();

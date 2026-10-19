@@ -71,8 +71,9 @@ public class AuthController : ControllerBase
         var token = tokenGen.GenerateLongLivedToken(user, 365);
         return Ok(new
         {
-            endpoint = "https://themarip-production.up.railway.app/api/sms/ingest",
+            endpoint = "https://themarip.up.railway.app/api/sms/ingest",
             apiKey = token,
+            bearerToken = $"Bearer {token}",
             userId = user.Id,
             email = user.Email,
             method = "POST",

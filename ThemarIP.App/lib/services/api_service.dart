@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import '../config/api_config.dart';
 import '../models/user_model.dart';
@@ -6,6 +7,7 @@ import '../models/transaction_model.dart';
 import '../models/subscription_model.dart';
 import '../utils/web_file_picker.dart';
 import 'auth_service.dart';
+import 'session_manager.dart';
 
 class ApiService {
   late final Dio _dio;
@@ -36,6 +38,7 @@ class ApiService {
         onError: (DioException error, handler) async {
           if (error.response?.statusCode == 401) {
             await AuthService.clearSession();
+            unawaited(SessionManager.instance.forceLogout(reason: 'Session expired. Please sign in again.'));
           }
           return handler.next(error);
         },

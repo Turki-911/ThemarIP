@@ -17,6 +17,15 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is String && args.isNotEmpty && _errorMessage == null) {
+      _errorMessage = args;
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
       setState(() {

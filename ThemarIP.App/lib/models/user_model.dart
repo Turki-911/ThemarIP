@@ -5,6 +5,7 @@ class UserModel {
   final int role; // 0 = Admin, 1 = User
   final String token;
   final String? accountNumber;
+  final bool requirePasswordReset;
 
   UserModel({
     required this.id,
@@ -13,6 +14,7 @@ class UserModel {
     required this.role,
     required this.token,
     this.accountNumber,
+    this.requirePasswordReset = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,7 @@ class UserModel {
       role: json['role'] is int ? json['role'] : (json['role'] == 'Admin' ? 0 : 1),
       token: json['token'] ?? '',
       accountNumber: json['accountNumber'],
+      requirePasswordReset: json['requirePasswordReset'] == true,
     );
   }
 
@@ -34,6 +37,7 @@ class UserModel {
       'role': role,
       'token': token,
       'accountNumber': accountNumber,
+      'requirePasswordReset': requirePasswordReset,
     };
   }
 }

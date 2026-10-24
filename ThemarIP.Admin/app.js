@@ -2741,6 +2741,13 @@ const Users = {
             <span class="badge" style="background:${statusColor}22;color:${statusColor};font-weight:600;font-size:11px;">
               ${u.accessStatus}
             </span>
+            ${u.requirePasswordReset ? `
+              <div style="margin-top:4px;">
+                <span class="badge" style="background:rgba(245,158,11,0.18);color:#FBBF24;border:1px solid rgba(245,158,11,0.35);font-size:10px;font-weight:700;">
+                  <i data-lucide="key-round" style="width:10px;height:10px;margin-right:2px;"></i>Reset Pending
+                </span>
+              </div>
+            ` : ''}
           </td>
           <td style="padding:14px 16px;">
             <div class="open-user-profile-btn" data-user-id="${u.id}" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;" title="Click to view profile & adjust score">
@@ -2754,6 +2761,9 @@ const Users = {
             <div style="display:inline-flex;gap:6px;">
               <button class="btn btn-xs open-user-profile-btn" data-user-id="${u.id}" style="background:rgba(124,58,237,0.15);color:#A78BFA;border:1px solid rgba(124,58,237,0.3);" title="Profile & Score Management">
                 <i data-lucide="user-cog" style="width:12px;height:12px;"></i> Manage
+              </button>
+              <button class="btn btn-xs reset-user-password-btn" data-user-id="${u.id}" data-user-email="${u.email}" style="background:rgba(245,158,11,0.15);color:#FBBF24;border:1px solid rgba(245,158,11,0.35);" title="Require user to enter & confirm a new password in the app">
+                <i data-lucide="key-round" style="width:12px;height:12px;"></i> Reset Pass
               </button>
               ${isAdmin ? `
                 <span class="badge" style="background:rgba(16,185,129,0.12);color:#10B981;font-size:11px;padding:4px 8px;">Admin</span>
@@ -2850,8 +2860,40 @@ const Users = {
     const roleSel = document.getElementById('modal-user-role');
     if (roleSel) roleSel.value = user.role || 'User';
 
+    const resetStatusText = document.getElementById('modal-reset-status-text');
+    if (resetStatusText) {
+      resetStatusText.innerHTML = user.requirePasswordReset
+        ? '<span style="color:#FBBF24;font-weight:700;">Password Reset Pending:</span> User will be prompted to enter &amp; confirm a new password in the app.'
+        : 'Prompt user in the app to enter &amp; confirm a new password, then redirect to login.';
+    }
+
     overlay.classList.remove('hidden');
     refreshIcons();
+  },
+
+  async triggerPasswordReset(userId, email) {
+    if (!userId) return;
+    try {
+      const res = await fetch(`${THEMAR_API_BASE}/statements/users/${userId}/require-password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        Toast.success(data.message || `Password reset enabled for ${email || 'user'}.`);
+        AuditLog.record('UPDATE', 'User', `Triggered mandatory password reset for ${email || userId}`);
+        await Users.render();
+        const resetStatusText = document.getElementById('modal-reset-status-text');
+        if (resetStatusText && this._activeEditingUserId === userId) {
+          resetStatusText.innerHTML = '<span style="color:#FBBF24;font-weight:700;">Password Reset Pending:</span> User will be prompted to enter &amp; confirm a new password in the app.';
+        }
+      } else {
+        const err = await res.text();
+        Toast.error(err || 'Failed to trigger password reset.');
+      }
+    } catch (e) {
+      Toast.error('Network error triggering password reset.');
+    }
   },
 
   closeProfileModal() {
@@ -2902,6 +2944,16 @@ const Users = {
         e.stopPropagation();
         const userId = btn.dataset.userId;
         if (userId) Users.openProfileModal(userId);
+      });
+    });
+
+    // Reset user password button
+    document.querySelectorAll('.reset-user-password-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const userId = btn.dataset.userId;
+        const email = btn.dataset.userEmail;
+        await Users.triggerPasswordReset(userId, email);
       });
     });
 
@@ -2970,6 +3022,16 @@ const Users = {
     // Save profile
     const saveBtn = document.getElementById('user-profile-save');
     if (saveBtn) saveBtn.addEventListener('click', () => Users.saveProfile());
+
+    // Modal Reset Password button
+    const modalResetBtn = document.getElementById('btn-modal-reset-password');
+    if (modalResetBtn) {
+      modalResetBtn.addEventListener('click', async () => {
+        if (!Users._activeEditingUserId) return;
+        const user = Users._users.find(u => u.id === Users._activeEditingUserId);
+        await Users.triggerPasswordReset(Users._activeEditingUserId, user?.email);
+      });
+    }
 
     // Sync score slider and number input
     const slider = document.getElementById('modal-score-slider');

@@ -133,6 +133,7 @@ public class StatementsController : ControllerBase
                 role = u.Role.ToString(),
                 accessStatus = u.AccessStatus.ToString(),
                 trustScore = u.TrustScore,
+                requirePasswordReset = string.Equals(u.AccessReasonNote, "RESET_PASSWORD_REQUIRED", StringComparison.OrdinalIgnoreCase),
                 createdAt = u.CreatedAt
             };
         }).OrderByDescending(u => u.createdAt).ToList();
@@ -226,6 +227,27 @@ public class StatementsController : ControllerBase
             return Ok(new { message = "User status updated.", status = user.AccessStatus.ToString() });
         }
         return BadRequest("Invalid access status.");
+    }
+
+    [HttpPost("users/{id}/require-password-reset")]
+    public async Task<IActionResult> RequireUserPasswordReset(
+        System.Guid id,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        var user = await context.Users.FindAsync(id);
+        if (user == null) return NotFound(new { message = "User not found." });
+
+        user.AccessReasonNote = "RESET_PASSWORD_REQUIRED";
+        await context.SaveChangesAsync(default);
+
+        return Ok(new
+        {
+            success = true,
+            message = $"Password reset enabled for {user.Email}. The user will be prompted to enter and confirm a new password in the app.",
+            userId = user.Id,
+            email = user.Email,
+            requirePasswordReset = true
+        });
     }
 
     [HttpPost("user-bank-selection")]

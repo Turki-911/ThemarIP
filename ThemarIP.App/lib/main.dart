@@ -7,10 +7,14 @@ import 'screens/terms_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/bmpf_main_screen.dart';
+import 'services/language_service.dart';
 import 'services/session_manager.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize language preference (defaults to English 'en')
+  await LanguageService.init();
 
   // Initialize 15-minute inactivity session tracking
   SessionManager.instance.initialize();
@@ -77,27 +81,35 @@ class BmpfApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      title: 'ThemarIP — Bank Muscat PFM Intelligence',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      initialRoute: '/splash',
-      builder: (context, child) {
-        return SessionTimeoutListener(
-          child: child ?? const SizedBox.shrink(),
+    return ValueListenableBuilder<String>(
+      valueListenable: LanguageService.notifier,
+      builder: (context, lang, _) {
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          title: 'ThemarIP — Financial Intelligence',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.darkTheme,
+          initialRoute: '/splash',
+          builder: (context, child) {
+            return Directionality(
+              textDirection: LanguageService.textDirection,
+              child: SessionTimeoutListener(
+                child: child ?? const SizedBox.shrink(),
+              ),
+            );
+          },
+          routes: {
+            '/splash': (context) => const SplashScreen(),
+            '/onboarding': (context) => const OnboardingScreen(),
+            '/terms': (context) => const TermsScreen(),
+            '/register': (context) => const RegisterScreen(),
+            '/login': (context) => const LoginScreen(),
+            '/upload': (context) => const BmpfMainScreen(initialPageIndex: 2),
+            '/categories': (context) => const BmpfMainScreen(initialPageIndex: 0),
+            '/hierarchy': (context) => const BmpfMainScreen(initialPageIndex: 0),
+            '/profile': (context) => const BmpfMainScreen(initialPageIndex: 1),
+          },
         );
-      },
-      routes: {
-        '/splash': (context) => const SplashScreen(),
-        '/onboarding': (context) => const OnboardingScreen(),
-        '/terms': (context) => const TermsScreen(),
-        '/register': (context) => const RegisterScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/upload': (context) => const BmpfMainScreen(initialPageIndex: 2),
-        '/categories': (context) => const BmpfMainScreen(initialPageIndex: 0),
-        '/hierarchy': (context) => const BmpfMainScreen(initialPageIndex: 0),
-        '/profile': (context) => const BmpfMainScreen(initialPageIndex: 1),
       },
     );
   }

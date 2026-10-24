@@ -291,18 +291,22 @@ def main():
     u_count = 0
     for u in live_data["users"]:
         uid = u.get("id")
-        cur.execute("SELECT Id FROM Users WHERE lower(Id) = lower(?)", (uid,))
+        req_reset = u.get("requirePasswordReset")
+        reason_note = "RESET_PASSWORD_REQUIRED" if req_reset else None
+        cur.execute("SELECT Id, AccessReasonNote FROM Users WHERE lower(Id) = lower(?)", (uid,))
         ex_u = cur.fetchone()
         if ex_u:
+            final_note = reason_note if req_reset is not None else ex_u[1]
             cur.execute(
                 """UPDATE Users
-                   SET FullName = ?, AccountNumber = ?, AccessStatus = ?, TrustScore = ?
+                   SET FullName = ?, AccountNumber = ?, AccessStatus = ?, TrustScore = ?, AccessReasonNote = ?
                    WHERE Id = ?""",
                 (
                     u.get("fullName") or "",
                     u.get("accountNumber"),
                     u.get("accessStatus") or "Approved",
                     u.get("trustScore") or 0,
+                    final_note,
                     ex_u[0],
                 ),
             )

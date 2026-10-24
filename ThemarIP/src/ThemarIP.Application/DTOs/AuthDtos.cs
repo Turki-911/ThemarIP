@@ -31,7 +31,15 @@ public record ResetPasswordRequestDto(
 
 public record OtpResponseDto(
     string Message,
-    string? PreviewOtp = null
+    string? PreviewOtp = null,
+    bool EmailSent = false,
+    bool RequirePasswordReset = false
+);
+
+public record CompletePasswordResetRequestDto(
+    string Email,
+    string NewPassword,
+    string ConfirmPassword
 );
 
 public record AuthResponseDto(
@@ -40,7 +48,8 @@ public record AuthResponseDto(
     string FullName,
     UserRole Role,
     string Token,
-    string? AccountNumber
+    string? AccountNumber,
+    bool RequirePasswordReset = false
 );
 
 public record SetAccountNumberRequestDto(string AccountNumber);

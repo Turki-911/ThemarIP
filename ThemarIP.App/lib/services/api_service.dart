@@ -53,8 +53,37 @@ class ApiService {
       data: {'email': email, 'password': password},
     );
     final user = UserModel.fromJson(response.data);
-    await AuthService.saveSession(user);
+    if (!user.requirePasswordReset && user.token.isNotEmpty) {
+      await AuthService.saveSession(user);
+    }
     return user;
+  }
+
+  Future<Map<String, dynamic>> completePasswordReset({
+    required String email,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final response = await _dio.post(
+      '/auth/complete-password-reset',
+      data: {
+        'email': email,
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
+      },
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getUserStatus({String? userId, String? email}) async {
+    final response = await _dio.get(
+      '/auth/user-status',
+      queryParameters: {
+        if (userId != null && userId.isNotEmpty) 'userId': userId,
+        if (email != null && email.isNotEmpty) 'email': email,
+      },
+    );
+    return response.data as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> requestSignupOtp(String email) async {

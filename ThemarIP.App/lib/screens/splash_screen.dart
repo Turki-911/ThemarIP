@@ -649,7 +649,7 @@ class _SplashScreenState extends State<SplashScreen> {
             right: 0,
             child: Center(
               child: Text(
-                'ThemarIP Financial Intelligence v2.4 • Omani Banking Sandbox',
+                'ThemarIP Financial Intelligence v2.5 • Sultanate of Oman',
                 style: TextStyle(
                   fontSize: 11,
                   color: AppTheme.textMuted.withValues(alpha: 0.5),

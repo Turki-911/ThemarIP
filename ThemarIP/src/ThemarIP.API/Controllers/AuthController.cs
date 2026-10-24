@@ -127,6 +127,61 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Complete password reset with new password & confirmation (Admin-triggered or direct reset)
+    /// </summary>
+    [HttpPost("complete-password-reset")]
+    public async Task<IActionResult> CompletePasswordReset([FromBody] CompletePasswordResetRequestDto request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _authService.CompletePasswordResetAsync(request, cancellationToken);
+            return Ok(new { message = response });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Check if user account requires a mandatory password reset
+    /// </summary>
+    [HttpGet("user-status")]
+    public async Task<IActionResult> GetUserStatus(
+        [FromQuery] Guid? userId,
+        [FromQuery] string? email,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        ThemarIP.Domain.Entities.User? user = null;
+        if (userId.HasValue && userId.Value != Guid.Empty)
+        {
+            user = await context.Users.FindAsync(userId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(email))
+        {
+            var norm = email.Trim().ToLowerInvariant();
+            user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                context.Users, u => u.Email.ToLower() == norm);
+        }
+
+        if (user == null)
+            return NotFound(new { message = "User not found." });
+
+        var requireReset = string.Equals(user.AccessReasonNote, "RESET_PASSWORD_REQUIRED", StringComparison.OrdinalIgnoreCase);
+        return Ok(new
+        {
+            userId = user.Id,
+            email = user.Email,
+            requirePasswordReset = requireReset,
+            accessStatus = user.AccessStatus.ToString()
+        });
+    }
+
+    /// <summary>
     /// Set the user's NBO account number
     /// </summary>
     [HttpPost("set-account-number")]

@@ -9,6 +9,7 @@ import '../models/bmpf_models.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/language_service.dart';
 import '../services/sms_service.dart';
 
 class LocalBank {
@@ -268,6 +269,220 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       setState(() => _currentUser = user);
       _fetchLiveDbCount();
     }
+    if (user != null && user.email.isNotEmpty) {
+      final status = await _apiService.getUserStatus(
+        userId: user.id,
+        email: user.email,
+      );
+      if (mounted && (status['requirePasswordReset'] == true || user.requirePasswordReset)) {
+        _showAdminForcedResetDialog(user.email);
+      }
+    }
+  }
+
+  void _showAdminForcedResetDialog(String email) {
+    final newPassCtrl = TextEditingController();
+    final confirmPassCtrl = TextEditingController();
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool isSubmitting = false;
+    String? modalError;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return PopScope(
+            canPop: false,
+            child: AlertDialog(
+              backgroundColor: const Color(0xFF141A29),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+                side: const BorderSide(color: AppTheme.neonPink, width: 1.2),
+              ),
+              title: Row(
+                children: [
+                  const Icon(Icons.lock_reset_rounded, color: AppTheme.neonPink, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      LanguageService.tr('admin_reset_required_title'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      LanguageService.tr('admin_reset_required_sub'),
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 13,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    if (modalError != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.redAccent, size: 17),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                modalError!,
+                                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    Text(
+                      LanguageService.tr('enter_new_password'),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: newPassCtrl,
+                      obscureText: obscureNew,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppTheme.textMuted),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                            color: AppTheme.textMuted,
+                            size: 20,
+                          ),
+                          onPressed: () => setModalState(() => obscureNew = !obscureNew),
+                        ),
+                        hintText: '••••••••••••',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      LanguageService.tr('confirm_new_password'),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: confirmPassCtrl,
+                      obscureText: obscureConfirm,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.verified_user_outlined, color: AppTheme.textMuted),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                            color: AppTheme.textMuted,
+                            size: 20,
+                          ),
+                          onPressed: () => setModalState(() => obscureConfirm = !obscureConfirm),
+                        ),
+                        hintText: '••••••••••••',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            final newPass = newPassCtrl.text;
+                            final confirmPass = confirmPassCtrl.text;
+                            if (newPass.length < 6) {
+                              setModalState(() {
+                                modalError = LanguageService.tr('password_min_error');
+                              });
+                              return;
+                            }
+                            if (newPass != confirmPass) {
+                              setModalState(() {
+                                modalError = LanguageService.tr('passwords_do_not_match');
+                              });
+                              return;
+                            }
+                            setModalState(() {
+                              isSubmitting = true;
+                              modalError = null;
+                            });
+                            try {
+                              await _apiService.completePasswordReset(
+                                email: email,
+                                newPassword: newPass,
+                                confirmPassword: confirmPass,
+                              );
+                              await AuthService.clearSession(keepBackgroundSms: true);
+                              if (!mounted) return;
+                              if (ctx.mounted) {
+                                Navigator.of(ctx).pop();
+                              }
+                              _showToast(LanguageService.tr('password_reset_success'));
+                              Navigator.of(context).pushNamedAndRemoveUntil(
+                                '/login',
+                                (route) => false,
+                              );
+                            } catch (e) {
+                              setModalState(() {
+                                modalError = 'Failed to update password. Please try again.';
+                                isSubmitting = false;
+                              });
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.emeraldGreen,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : Text(
+                            LanguageService.tr('update_password'),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _fetchLiveDbCount() async {
@@ -729,7 +944,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           children: const [
             Icon(Icons.verified_user_rounded, color: Color(0xFF10B981), size: 22),
             SizedBox(width: 8),
-            Text('CBO Compliance & Security', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Security & Data Privacy', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
@@ -737,7 +952,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
             Text(
-              'ThemarIP is officially registered and operates under the Central Bank of Oman (CBO) regulatory guidelines.',
+              'ThemarIP protects your personal financial analytics with bank-grade security and strict data privacy.',
               style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13, height: 1.4),
             ),
             SizedBox(height: 12),
@@ -1123,12 +1338,12 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.verified_rounded, size: 14, color: Color(0xFF34D399)),
-                  SizedBox(width: 4),
-                  Text('CBO Verified', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF34D399))),
+                  const Icon(Icons.verified_rounded, size: 14, color: Color(0xFF34D399)),
+                  const SizedBox(width: 4),
+                  Text(LanguageService.tr('verified_badge'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF34D399))),
                 ],
               ),
             ),
@@ -1479,7 +1694,51 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         ],
         const SizedBox(height: 24),
 
-        // CBO Compliance & Security Card
+        // Language Selection Card (English Default + Arabic)
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF131B2E),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF26324A)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4F6EF7).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.language_rounded, size: 20, color: Color(0xFF4F6EF7)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      LanguageService.tr('app_language'),
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      LanguageService.tr('language_desc'),
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              LanguageSelectorPill(
+                onChanged: () => setState(() {}),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Security & Data Privacy Card (No CBO reference)
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1491,19 +1750,19 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                children: const [
-                  Icon(Icons.shield_outlined, size: 18, color: Color(0xFF34D399)),
-                  SizedBox(width: 8),
+                children: [
+                  const Icon(Icons.shield_outlined, size: 18, color: Color(0xFF34D399)),
+                  const SizedBox(width: 8),
                   Text(
-                    'Security & Central Bank of Oman (CBO)',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                    LanguageService.tr('security_privacy_title'),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              const Text(
-                '• Themar Personal Finance Management (BMPF) operates under official Central Bank of Oman sandbox guidelines.\n• Read-only statement extraction — your banking credentials and passwords are never collected.\n• All analytics are processed securely with AES-256 data protection.',
-                style: TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8), height: 1.55),
+              Text(
+                LanguageService.tr('security_privacy_bullets'),
+                style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8), height: 1.55),
               ),
             ],
           ),
@@ -1514,7 +1773,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         OutlinedButton.icon(
           onPressed: _logout,
           icon: const Icon(Icons.logout_rounded, size: 18, color: Color(0xFFEF4444)),
-          label: const Text('Sign Out of ThemarIP', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+          label: Text(LanguageService.tr('sign_out'), style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
           style: OutlinedButton.styleFrom(
             side: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
             minimumSize: const Size(double.infinity, 50),
@@ -1525,7 +1784,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
         const Center(
           child: Text(
-            'ThemarIP v2.4 • Central Bank of Oman Sandbox',
+            'ThemarIP v2.5 • Financial Literacy & Wealth Intelligence',
             style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
           ),
         ),
@@ -1602,14 +1861,14 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Central Bank of Oman Registration Trust Pill (Matching Image 1)
+        // Bank-Grade Security Trust Pill
         Row(
           children: const [
             Icon(Icons.shield_outlined, size: 16, color: Color(0xFFA78BFA)),
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                'ThemarIP is registered with the Central Bank of Oman',
+                'Protected with 256-bit bank-grade encryption & privacy',
                 style: TextStyle(color: Color(0xFFA78BFA), fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
@@ -1884,7 +2143,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Security & Central Bank of Oman Verification Card
+        // Security & Encryption Verification Card
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1907,7 +2166,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                '• ThemarIP is officially registered and licensed with the Central Bank of Oman (CBO).\n• Protected with 256-bit AES encryption.\n• Read-only statement extraction — your online banking passwords and debit PINs are never requested.',
+                '• Protected with 256-bit AES bank-grade encryption.\n• Read-only statement extraction — your online banking passwords and debit PINs are never requested.\n• Tailored multi-bank financial intelligence for Omani accounts.',
                 style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.55),
               ),
             ],

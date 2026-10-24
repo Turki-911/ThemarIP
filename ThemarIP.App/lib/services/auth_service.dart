@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
@@ -11,6 +12,8 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, user.token);
     await prefs.setString(_userKey, jsonEncode(user.toJson()));
+    // Immediately push the permanent token and sender rules to native Android SMS receiver
+    unawaited(SmsService.refreshSenders());
   }
 
   static Future<String?> getToken() async {

@@ -7,7 +7,6 @@ import '../models/transaction_model.dart';
 import '../models/subscription_model.dart';
 import '../utils/web_file_picker.dart';
 import 'auth_service.dart';
-import 'session_manager.dart';
 
 class ApiService {
   late final Dio _dio;
@@ -36,10 +35,7 @@ class ApiService {
           return handler.next(options);
         },
         onError: (DioException error, handler) async {
-          if (error.response?.statusCode == 401) {
-            await AuthService.clearSession();
-            unawaited(SessionManager.instance.forceLogout(reason: 'Session expired. Please sign in again.'));
-          }
+          // Keep user logged in permanently so background SMS listener never stops.
           return handler.next(error);
         },
       ),

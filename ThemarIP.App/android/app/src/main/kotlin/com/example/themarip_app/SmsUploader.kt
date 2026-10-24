@@ -10,8 +10,8 @@ import java.net.URL
  * Shared by the broadcast receiver (works with no Flutter engine running) and MainActivity.
  *
  * - Config (API base URL + supported sender IDs) is pushed in from Flutter and cached natively.
- * - The auth token is read from the same store the Flutter app uses (shared_preferences).
- * - Undeliverable messages are queued and retried the next time we get network/app launch.
+ * - Includes built-in defaults for the live Railway API URL and Omani bank senders so SMS
+ *   logging works continuously forever as long as the user has logged in once.
  */
 object SmsUploader {
     private const val PREFS = "themarip_sms"
@@ -20,7 +20,28 @@ object SmsUploader {
     private const val KEY_TOKEN = "auth_token"
     private const val KEY_PAUSED = "paused"
     private const val KEY_PENDING = "pending"
-    private const val MAX_PENDING = 50
+    private const val MAX_PENDING = 100
+
+    private const val DEFAULT_BASE_URL = "https://themarip.up.railway.app/api"
+    private val DEFAULT_SENDERS = setOf(
+        "bank muscat",
+        "bankmuscat",
+        "bm-alert",
+        "bmalert",
+        "nbo",
+        "national bank of oman",
+        "omanarabbank",
+        "oab",
+        "bankdhofar",
+        "bank dhofar",
+        "soharint",
+        "sohar international",
+        "banknizwa",
+        "bank nizwa",
+        "ahlibank",
+        "ahli bank",
+        "alizz"
+    )
 
     // shared_preferences (Flutter, legacy API) stores keys as "flutter.<key>"
     private const val FLUTTER_PREFS = "FlutterSharedPreferences"
@@ -28,10 +49,14 @@ object SmsUploader {
 
     private val lock = Any()
 
+    private fun normalizeSender(s: String): String =
+        s.trim().lowercase().replace(Regex("[\\s\\-_.]"), "")
+
     fun configure(ctx: Context, baseUrl: String, senders: List<String>, token: String? = null, paused: Boolean? = null) {
+        val mergedSenders = (senders.map { it.trim().lowercase() }.filter { it.isNotEmpty() } + DEFAULT_SENDERS).toSet()
         val editor = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_BASE_URL, baseUrl.trimEnd('/'))
-            .putStringSet(KEY_SENDERS, senders.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet())
+            .putString(KEY_BASE_URL, baseUrl.trimEnd('/').ifEmpty { DEFAULT_BASE_URL })
+            .putStringSet(KEY_SENDERS, mergedSenders)
         if (!token.isNullOrBlank()) {
             editor.putString(KEY_TOKEN, token)
         }
@@ -58,18 +83,41 @@ object SmsUploader {
         if (sender.isNullOrBlank()) return false
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY_PAUSED, false)) return false
-        val set = prefs.getStringSet(KEY_SENDERS, emptySet()) ?: emptySet()
-        return set.contains(sender.trim().lowercase())
+
+        val stored = prefs.getStringSet(KEY_SENDERS, null)
+        val activeSet = if (stored.isNullOrEmpty()) DEFAULT_SENDERS else (stored + DEFAULT_SENDERS)
+
+        val rawLower = sender.trim().lowercase()
+        val norm = normalizeSender(sender)
+        return activeSet.any { candidate ->
+            val candLower = candidate.trim().lowercase()
+            val candNorm = normalizeSender(candidate)
+            rawLower == candLower ||
+                norm == candNorm ||
+                (candNorm.length >= 3 && norm.contains(candNorm))
+        }
     }
 
     private fun token(ctx: Context): String? {
+        // Prefer the latest Flutter login token first, then fallback to cached dedicated token
+        val flutterTok = ctx.getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+            .getString(FLUTTER_TOKEN_KEY, null)
+        if (!flutterTok.isNullOrBlank()) {
+            // Keep dedicated store synced automatically
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(KEY_TOKEN, flutterTok)
+                .apply()
+            return flutterTok
+        }
         val dedicated = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_TOKEN, null)
         if (!dedicated.isNullOrBlank()) return dedicated
-        return ctx.getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE).getString(FLUTTER_TOKEN_KEY, null)
+        return null
     }
 
-    private fun baseUrl(ctx: Context): String? =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_BASE_URL, null)
+    private fun baseUrl(ctx: Context): String {
+        val saved = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_BASE_URL, null)
+        return if (saved.isNullOrBlank()) DEFAULT_BASE_URL else saved.trimEnd('/')
+    }
 
     private enum class Outcome { DELIVERED, RETRY, DROP }
 
@@ -111,14 +159,14 @@ object SmsUploader {
     }
 
     private fun post(ctx: Context, item: JSONObject): Outcome {
-        val base = baseUrl(ctx) ?: return Outcome.RETRY
+        val base = baseUrl(ctx)
         val token = token(ctx) ?: return Outcome.RETRY // not signed in yet; keep until they are
         var conn: HttpURLConnection? = null
         return try {
             conn = (URL("$base/sms/ingest").openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
-                connectTimeout = 4000
-                readTimeout = 5000
+                connectTimeout = 6000
+                readTimeout = 8000
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Authorization", "Bearer $token")

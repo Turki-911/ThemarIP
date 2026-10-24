@@ -42,7 +42,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiryInMinutes),
+            expires: DateTime.UtcNow.AddYears(100),
             signingCredentials: credentials
         );
 

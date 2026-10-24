@@ -565,14 +565,25 @@ const Auth = {
     App.init();
     refreshIcons();
 
-    // Load CategoryRules, Merchants, Confidence Settings, and Intelligence Rules from themarip.db
-    await loadCategoryRulesFromDb();
-    await loadMerchantsFromDb();
-    await loadConfidenceSettingsFromDb();
-    await loadIntelligenceRulesFromDb();
-    loadRealTransactions();
+    // Load CategoryRules, Merchants, Confidence Settings, Intelligence Rules, Users, and SMS Rules from themarip.db
+    await Promise.all([
+      loadCategoryRulesFromDb(),
+      loadMerchantsFromDb(),
+      loadConfidenceSettingsFromDb(),
+      loadIntelligenceRulesFromDb(),
+      typeof Users !== 'undefined' && Users.load ? Users.load() : Promise.resolve(),
+    ]);
+    await loadRealTransactions();
+    if (typeof SmsConfig !== 'undefined' && SmsConfig.render) {
+      SmsConfig.render();
+    }
     if (!Auth._pollInterval) {
-      Auth._pollInterval = setInterval(loadRealTransactions, 5000);
+      Auth._pollInterval = setInterval(() => {
+        loadRealTransactions();
+        if (state.activeView === 'view-sms-config' && typeof SmsConfig !== 'undefined' && SmsConfig.loadLog) {
+          SmsConfig.loadLog();
+        }
+      }, 5000);
     }
   }
 };
@@ -1094,13 +1105,14 @@ const Dashboard = {
   renderCharts() {
     const txns = state.transactions;
 
-    // 1. Categorization Rate (line over 14 days)
+    // 1. Categorization Rate (line over 14 days anchored to latest transaction date)
+    const latestDateStr = txns.reduce((max, t) => (t.date && t.date > max ? t.date : max), '') || new Date().toISOString().split('T')[0];
     const days = [];
     const catData = [];
     const uncatData = [];
     for (let i = 13; i >= 0; i--) {
-      const d = new Date('2026-09-01');
-      d.setDate(d.getDate() - i);
+      const d = new Date(latestDateStr + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() - i);
       const dateStr = d.toISOString().split('T')[0];
       const dayTxns = txns.filter(t=>t.date===dateStr);
       days.push(d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}));
@@ -1138,8 +1150,8 @@ const Dashboard = {
     const uncatTrend = [];
     const days2 = [];
     for (let i = 13; i >= 0; i--) {
-      const d = new Date('2026-09-01');
-      d.setDate(d.getDate() - i);
+      const d = new Date(latestDateStr + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() - i);
       const dateStr = d.toISOString().split('T')[0];
       days2.push(d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}));
       uncatTrend.push(txns.filter(t=>t.date===dateStr && t.status==='uncategorized').length);

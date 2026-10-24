@@ -111,7 +111,8 @@ class SessionManager with WidgetsBindingObserver {
       _inactivityTimer?.cancel();
       _inactivityTimer = null;
 
-      await AuthService.clearSession();
+      // Clear UI session on 15-min idle timeout, but keep background SMS listener active!
+      await AuthService.clearSession(keepBackgroundSms: true);
 
       final state = navigatorKey.currentState;
       if (state != null) {

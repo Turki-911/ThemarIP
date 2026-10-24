@@ -132,7 +132,7 @@ const SmsConfig = {
     const color = { Saved: 'var(--accent-emerald)', Duplicate: 'var(--accent-amber)', NoRule: 'var(--text-dim)', NoMatch: 'var(--accent-amber)', ValidationFailed: 'var(--accent-rose)', Error: 'var(--accent-rose)' };
     tbody.innerHTML = rows.map((l, idx) => `<tr>
       <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${new Date(l.createdAt).toLocaleString('en-GB')}</td>
-      <td style="font-family:monospace;font-size:12px;">${SmsConfig.esc(l.sender)}</td>
+      <td style="font-family:monospace;font-size:12px;">${SmsConfig.esc(l.sender)}${l.userEmail ? `<br><span style="font-family:sans-serif;font-size:10.5px;color:var(--text-dim);">${SmsConfig.esc(l.userEmail)}</span>` : ''}</td>
       <td><span style="font-weight:600;font-size:12px;color:${color[l.status] || 'inherit'};">${SmsConfig.esc(l.status)}</span>${l.ruleVersion ? ' <span style="color:var(--text-dim);font-size:11px;">v' + l.ruleVersion + '</span>' : ''}</td>
       <td style="font-size:12px;color:var(--text-muted);">${SmsConfig.esc(l.details)}</td>
       <td style="font-size:12px;max-width:340px;" class="truncate" title="${SmsConfig.esc(l.rawMessage)}">${SmsConfig.esc(l.rawMessage)}</td>

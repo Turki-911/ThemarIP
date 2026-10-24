@@ -17,6 +17,8 @@ object SmsUploader {
     private const val PREFS = "themarip_sms"
     private const val KEY_BASE_URL = "base_url"
     private const val KEY_SENDERS = "senders"
+    private const val KEY_TOKEN = "auth_token"
+    private const val KEY_PAUSED = "paused"
     private const val KEY_PENDING = "pending"
     private const val MAX_PENDING = 50
 
@@ -26,12 +28,27 @@ object SmsUploader {
 
     private val lock = Any()
 
-    fun configure(ctx: Context, baseUrl: String, senders: List<String>) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+    fun configure(ctx: Context, baseUrl: String, senders: List<String>, token: String? = null, paused: Boolean? = null) {
+        val editor = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_BASE_URL, baseUrl.trimEnd('/'))
             .putStringSet(KEY_SENDERS, senders.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet())
+        if (!token.isNullOrBlank()) {
+            editor.putString(KEY_TOKEN, token)
+        }
+        if (paused != null) {
+            editor.putBoolean(KEY_PAUSED, paused)
+        }
+        editor.apply()
+    }
+
+    fun setPaused(ctx: Context, paused: Boolean) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_PAUSED, paused)
             .apply()
     }
+
+    fun isPaused(ctx: Context): Boolean =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_PAUSED, false)
 
     fun clear(ctx: Context) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
@@ -39,12 +56,17 @@ object SmsUploader {
 
     fun isSupportedSender(ctx: Context, sender: String?): Boolean {
         if (sender.isNullOrBlank()) return false
-        val set = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(KEY_SENDERS, emptySet()) ?: emptySet()
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_PAUSED, false)) return false
+        val set = prefs.getStringSet(KEY_SENDERS, emptySet()) ?: emptySet()
         return set.contains(sender.trim().lowercase())
     }
 
-    private fun token(ctx: Context): String? =
-        ctx.getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE).getString(FLUTTER_TOKEN_KEY, null)
+    private fun token(ctx: Context): String? {
+        val dedicated = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_TOKEN, null)
+        if (!dedicated.isNullOrBlank()) return dedicated
+        return ctx.getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE).getString(FLUTTER_TOKEN_KEY, null)
+    }
 
     private fun baseUrl(ctx: Context): String? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_BASE_URL, null)

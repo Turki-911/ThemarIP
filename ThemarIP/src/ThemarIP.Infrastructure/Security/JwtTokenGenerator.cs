@@ -23,7 +23,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         var secretKey = _configuration["JwtSettings:Secret"] ?? "ThemarIPSecretKeyForJWTAuthentication2026SuperSecureKey!";
         var issuer = _configuration["JwtSettings:Issuer"] ?? "ThemarIP.API";
         var audience = _configuration["JwtSettings:Audience"] ?? "ThemarIP.Client";
-        var expiryInMinutes = double.Parse(_configuration["JwtSettings:ExpiryMinutes"] ?? "1440");
+        var expiryInMinutes = double.Parse(_configuration["JwtSettings:ExpiryMinutes"] ?? "525600");
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

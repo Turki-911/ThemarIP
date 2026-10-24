@@ -84,6 +84,8 @@ public class SmsRuleTestResultDto
 public class SmsLogDto
 {
     public Guid Id { get; set; }
+    public Guid? UserId { get; set; }
+    public string? UserEmail { get; set; }
     public string Sender { get; set; } = string.Empty;
     public string RawMessage { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;

@@ -29,11 +29,13 @@ class AuthService {
     return null;
   }
 
-  static Future<void> clearSession() async {
+  static Future<void> clearSession({bool keepBackgroundSms = false}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
-    await prefs.remove(SmsService.askedKey);
-    await SmsService.clear();
+    if (!keepBackgroundSms) {
+      await prefs.remove(SmsService.askedKey);
+      await SmsService.clear();
+    }
   }
 }

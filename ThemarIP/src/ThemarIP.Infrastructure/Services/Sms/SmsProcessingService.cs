@@ -64,15 +64,14 @@ public class SmsProcessingService : ISmsProcessingService
             // Link user's selected bank(s) (supports multi-bank selection in user.AccountNumber)
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
             var selection = BankCatalog.ParseSelection(user?.AccountNumber);
-            if (selection.Count == 0)
-                return await Finish(entry, "NoRule", "No bank selected by user.");
 
             var allRules = await _db.BankSmsRules.ToListAsync();
-            var userRules = allRules.Where(r => BankCatalog.IsSelected(r.BankCode, r.BankName, selection)).ToList();
+            var userRules = selection.Count > 0
+                ? allRules.Where(r => BankCatalog.IsSelected(r.BankCode, r.BankName, selection)).ToList()
+                : allRules;
 
-            // Rules are enabled when the user selects the bank (StatementsController.SaveUserBankSelection).
-            // Here we respect the admin's Active switch so a paused rule stays paused.
-            // Only rules of the user's selected banks are considered — never other banks' rules.
+            // Respect the admin's Active switch so a paused rule stays paused.
+            // Prefer rules for the user's selected banks, falling back to any active rule matching the sender.
             var rules = userRules
                 .Where(r => r.IsActive && SenderMatches(r.SenderIds, sender))
                 .OrderByDescending(r => r.UpdatedAt)
@@ -80,10 +79,15 @@ public class SmsProcessingService : ISmsProcessingService
 
             if (rules.Count == 0)
             {
-                var otherBank = allRules.Any(r => r.IsActive && SenderMatches(r.SenderIds, sender));
-                return await Finish(entry, "NoRule", otherBank
-                    ? $"Sender '{sender}' belongs to a bank not selected by user."
-                    : $"No active rule for sender '{sender}'.");
+                rules = allRules
+                    .Where(r => r.IsActive && SenderMatches(r.SenderIds, sender))
+                    .OrderByDescending(r => r.UpdatedAt)
+                    .ToList();
+            }
+
+            if (rules.Count == 0)
+            {
+                return await Finish(entry, "NoRule", $"No active rule for sender '{sender}'.");
             }
 
             BankSmsRule? used = null;
@@ -134,13 +138,22 @@ public class SmsProcessingService : ISmsProcessingService
 
             // The shared save path defaults bank fields; stamp the real bank on the row we just created.
             var tx = await _db.PfmTransactions.FirstOrDefaultAsync(t => t.Id == txId);
+            var bank = BankCatalog.Canonical(used.BankCode, used.BankName);
             if (tx != null)
             {
-                var bank = BankCatalog.Canonical(used.BankCode, used.BankName);
                 tx.BankName = bank.Name;
                 tx.BankCode = bank.Code;
-                await _db.SaveChangesAsync();
             }
+            if (user != null)
+            {
+                var existingBanks = BankCatalog.ParseSelection(user.AccountNumber).Select(b => b.Name).ToList();
+                if (!existingBanks.Any(b => string.Equals(b, bank.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    existingBanks.Add(bank.Name);
+                    user.AccountNumber = string.Join(", ", existingBanks);
+                }
+            }
+            await _db.SaveChangesAsync();
 
             entry.TransactionId = txId;
             return await Finish(entry, "Saved", "Transaction saved.", ex, txId);
@@ -205,7 +218,11 @@ public class SmsProcessingService : ISmsProcessingService
         {
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId.Value);
             var selection = BankCatalog.ParseSelection(user?.AccountNumber);
-            rules = rules.Where(r => BankCatalog.IsSelected(r.BankCode, r.BankName, selection)).ToList();
+            if (selection.Count > 0)
+            {
+                var filtered = rules.Where(r => BankCatalog.IsSelected(r.BankCode, r.BankName, selection)).ToList();
+                if (filtered.Count > 0) rules = filtered;
+            }
         }
         return rules.Select(r => r.SenderIds).SelectMany(SplitSenders).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList();
     }
@@ -318,11 +335,21 @@ public class SmsProcessingService : ISmsProcessingService
     {
         take = Math.Clamp(take, 1, 500);
         var rows = await _db.SmsProcessingLogs.ToListAsync();
+        var users = await _db.Users.ToDictionaryAsync(u => u.Id, u => u.Email);
         return rows.OrderByDescending(l => l.CreatedAt).Take(take).Select(l => new SmsLogDto
         {
-            Id = l.Id, Sender = l.Sender, RawMessage = l.RawMessage, Status = l.Status, Details = l.Details,
-            ExtractedJson = l.ExtractedJson, RuleId = l.RuleId, RuleVersion = l.RuleVersion,
-            TransactionId = l.TransactionId, CreatedAt = l.CreatedAt
+            Id = l.Id,
+            UserId = l.UserId,
+            UserEmail = l.UserId.HasValue && users.TryGetValue(l.UserId.Value, out var email) ? email : null,
+            Sender = l.Sender,
+            RawMessage = l.RawMessage,
+            Status = l.Status,
+            Details = l.Details,
+            ExtractedJson = l.ExtractedJson,
+            RuleId = l.RuleId,
+            RuleVersion = l.RuleVersion,
+            TransactionId = l.TransactionId,
+            CreatedAt = l.CreatedAt
         }).ToList();
     }
 

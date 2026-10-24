@@ -444,9 +444,10 @@ def main():
                 """INSERT INTO SmsProcessingLogs (
                        Id, UserId, Sender, RawMessage, MessageHash, RuleId, RuleVersion,
                        Status, Details, ExtractedJson, Reference, TransactionId, ReceivedAt, CreatedAt
-                   ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)""",
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)""",
                 (
                     lid,
+                    l.get("userId"),
                     l.get("sender") or "",
                     l.get("rawMessage") or "",
                     msg_hash,

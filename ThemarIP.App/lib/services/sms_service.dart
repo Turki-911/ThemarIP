@@ -14,31 +14,18 @@ import 'auth_service.dart';
 class SmsService {
   static const MethodChannel _channel = MethodChannel('themarip/sms');
   static const String askedKey = 'themarip_sms_permission_asked';
+  static const String pausedKey = 'themarip_sms_paused';
 
-  static bool get _supported =>
+  static bool get isSupported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  static bool get _supported => isSupported;
 
   /// Call after the user is signed in. Safe to call repeatedly; never throws.
   static Future<void> start(BuildContext context, {bool forceAsk = false}) async {
     if (!_supported) return;
     try {
-      final token = await AuthService.getToken();
-      if (token == null || token.isEmpty) return;
-
-      List<String> senders = [];
-      try {
-        senders = await _fetchSenders(token);
-      } catch (e) {
-        debugPrint('Fetch senders notice: $e');
-      }
-      if (senders.isEmpty) {
-        senders = const ['bank muscat', 'BankMuscat', 'BM-ALERT', 'NBO', 'OmanArabBank', 'BankDhofar', 'SoharInt'];
-      }
-
-      await _channel.invokeMethod('configure', {
-        'baseUrl': ApiConfig.baseUrl,
-        'senders': senders,
-      });
+      await refreshSenders();
 
       if (await _channel.invokeMethod<bool>('hasPermission') == true) return;
 
@@ -100,7 +87,61 @@ class SmsService {
     }
   }
 
-  /// Forget cached config and any queued, unsent messages (call on sign-out).
+  /// Syncs active sender IDs and token to the native Android background receiver.
+  static Future<void> refreshSenders() async {
+    if (!_supported) return;
+    try {
+      final token = await AuthService.getToken();
+      if (token == null || token.isEmpty) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final paused = prefs.getBool(pausedKey) ?? false;
+
+      List<String> senders = [];
+      bool fetchFailed = false;
+      try {
+        senders = await _fetchSenders(token);
+      } catch (e) {
+        fetchFailed = true;
+        debugPrint('Fetch senders notice: $e');
+      }
+      if (fetchFailed && senders.isEmpty) {
+        senders = const ['bank muscat', 'BankMuscat', 'BM-ALERT', 'NBO', 'OmanArabBank', 'BankDhofar', 'SoharInt'];
+      }
+
+      await _channel.invokeMethod('configure', {
+        'baseUrl': ApiConfig.baseUrl,
+        'senders': paused ? <String>[] : senders,
+        'token': token,
+        'paused': paused,
+      });
+    } catch (e) {
+      debugPrint('SmsService.refreshSenders error: $e');
+    }
+  }
+
+  /// Check if user paused background SMS listening
+  static Future<bool> isPaused() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(pausedKey) ?? false;
+  }
+
+  /// Toggle background SMS listening on or off
+  static Future<void> setPaused(bool paused) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(pausedKey, paused);
+    if (!_supported) return;
+    try {
+      await _channel.invokeMethod('setPaused', {'paused': paused});
+      if (!paused) {
+        await refreshSenders();
+      }
+    } catch (e) {
+      debugPrint('SmsService.setPaused error: $e');
+    }
+  }
+
+  /// Forget cached config and any queued, unsent messages (call on explicit sign-out).
   static Future<void> clear() async {
     if (!_supported) return;
     try {

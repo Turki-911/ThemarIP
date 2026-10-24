@@ -183,6 +183,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   int _dbTxCount = 0;
   bool _isLoading = false;
   String _loadingMessage = '';
+  bool _smsPaused = false;
 
   // 1. PDF State
   PlatformFile? _selectedPdfFile;
@@ -222,6 +223,9 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     _selectedPageIndex = widget.initialPageIndex;
     _loadUser();
     _fetchLiveDbCount();
+    SmsService.isPaused().then((paused) {
+      if (mounted) setState(() => _smsPaused = paused);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future.delayed(const Duration(milliseconds: 600));
       if (mounted) SmsService.start(context);
@@ -325,7 +329,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       bankName: bank.nameEn,
       userId: _currentUser?.id,
       email: _currentUser?.email,
-    );
+    ).then((_) => SmsService.refreshSenders());
   }
 
   Future<void> _pickPdf() async {
@@ -514,7 +518,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         bankName: bankName,
         userId: _currentUser?.id,
         email: _currentUser?.email,
-      );
+      ).then((_) => SmsService.refreshSenders());
     }
   }
 
@@ -1316,6 +1320,97 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               ],
             ),
           ),
+        if (SmsService.isSupported) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131B2E),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: (_smsPaused ? const Color(0xFFF59E0B) : const Color(0xFF10B981)).withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: (_smsPaused ? const Color(0xFFF59E0B) : const Color(0xFF10B981)).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        _smsPaused ? Icons.pause_circle_outline_rounded : Icons.sms_rounded,
+                        size: 20,
+                        color: _smsPaused ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Bank SMS Auto-Listener',
+                            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          Text(
+                            _smsPaused
+                                ? 'Paused — App has stopped listening to SMS'
+                                : 'Active — Automatically logging verified bank SMS',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _smsPaused ? const Color(0xFFFBBF24) : const Color(0xFF34D399),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: !_smsPaused,
+                      activeThumbColor: const Color(0xFF10B981),
+                      onChanged: (enabled) async {
+                        final paused = !enabled;
+                        setState(() => _smsPaused = paused);
+                        await SmsService.setPaused(paused);
+                        _showToast(
+                          paused
+                              ? 'SMS Auto-Listener paused. Stopped listening to incoming SMS.'
+                              : 'SMS Auto-Listener resumed & synced!',
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await SmsService.refreshSenders();
+                      await _fetchCategoryHierarchy();
+                      await _fetchLiveDbCount();
+                      _showToast('SMS rules synced & queued messages flushed!');
+                    },
+                    icon: const Icon(Icons.sync_rounded, size: 16, color: Color(0xFF00E5FF)),
+                    label: const Text(
+                      'Sync Rules & Flush Queued SMS',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF00E5FF)),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: const Color(0xFF00E5FF).withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (defaultTargetPlatform != TargetPlatform.android) ...[
           const SizedBox(height: 24),
 

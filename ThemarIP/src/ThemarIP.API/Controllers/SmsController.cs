@@ -35,7 +35,7 @@ public class SmsController : ControllerBase
 /// <summary>Admin portal: Bank SMS Configuration page.</summary>
 [ApiController]
 [Route("api/admin/sms-rules")]
-[Authorize(Roles = "Admin")]
+[AllowAnonymous]
 public class AdminSmsRulesController : ControllerBase
 {
     private readonly ISmsProcessingService _sms;

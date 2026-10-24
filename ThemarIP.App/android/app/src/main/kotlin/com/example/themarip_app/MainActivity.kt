@@ -36,12 +36,23 @@ class MainActivity : FlutterActivity() {
             "configure" -> {
                 val base = call.argument<String>("baseUrl")
                 val senders = call.argument<List<String>>("senders") ?: emptyList()
+                val token = call.argument<String>("token")
+                val paused = call.argument<Boolean>("paused")
                 if (base.isNullOrBlank()) { result.error("bad_args", "baseUrl required", null); return }
-                SmsUploader.configure(applicationContext, base, senders)
+                SmsUploader.configure(applicationContext, base, senders, token, paused)
                 // Drain anything queued while offline / signed out.
                 Thread { SmsUploader.flush(applicationContext) }.start()
                 result.success(null)
             }
+            "setPaused" -> {
+                val paused = call.argument<Boolean>("paused") ?: false
+                SmsUploader.setPaused(applicationContext, paused)
+                if (!paused) {
+                    Thread { SmsUploader.flush(applicationContext) }.start()
+                }
+                result.success(null)
+            }
+            "isPaused" -> result.success(SmsUploader.isPaused(applicationContext))
             "clear" -> { SmsUploader.clear(applicationContext); result.success(null) }
             else -> result.notImplemented()
         }

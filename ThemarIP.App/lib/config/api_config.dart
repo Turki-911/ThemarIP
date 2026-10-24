@@ -113,7 +113,10 @@ class ApiConfig {
   // Endpoints
   static const String health = '/health';
   static const String register = '/auth/register';
+  static const String requestSignupOtp = '/auth/request-signup-otp';
   static const String login = '/auth/login';
+  static const String forgotPassword = '/auth/forgot-password';
+  static const String resetPassword = '/auth/reset-password';
 
   static const String statements = '/statements';
   static const String statementsUpload = '/statements/upload';

@@ -17,8 +17,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
   // Status tracking
   double _progress = 0.15;
-  String _statusMessage = 'Initializing system kernel...';
-  String _statusSubtext = 'Loading local cryptographic modules';
+  String _statusMessage = 'Empowering Financial Literacy...';
+  String _statusSubtext = 'Initializing personal wealth intelligence & smart budgeting';
   bool _hasError = false;
   String? _errorDetails;
   ApiHealthResult? _healthResult;
@@ -32,8 +32,8 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _startSystemBootstrap() async {
     setState(() {
       _progress = 0.20;
-      _statusMessage = 'Initializing system kernel...';
-      _statusSubtext = 'Loading local configuration and network settings';
+      _statusMessage = 'Empowering Financial Literacy...';
+      _statusSubtext = 'Initializing personal wealth intelligence & smart budgeting';
       _hasError = false;
       _errorDetails = null;
     });
@@ -45,8 +45,8 @@ class _SplashScreenState extends State<SplashScreen> {
     // Step 2: Check backend infrastructure & database
     setState(() {
       _progress = 0.55;
-      _statusMessage = 'Verifying API & database connection...';
-      _statusSubtext = 'Connecting to API server...';
+      _statusMessage = 'Connecting Financial Literacy Engine...';
+      _statusSubtext = 'Synchronizing bank intelligence & financial categories';
     });
 
     final health = await _apiService.checkHealth();
@@ -70,9 +70,9 @@ class _SplashScreenState extends State<SplashScreen> {
     // Step 3: Success connection
     setState(() {
       _progress = 0.85;
-      _statusMessage = 'Database synchronized';
+      _statusMessage = 'Financial Intelligence Synchronized';
       _statusSubtext =
-          'Connected to ${health.dbProvider} (${health.dbCategories} categories verified, ${health.latencyMs}ms latency)';
+          'Connected to secure engine (${health.dbCategories} financial literacy categories ready, ${health.latencyMs}ms latency)';
     });
 
     await Future.delayed(const Duration(milliseconds: 500));
@@ -81,8 +81,8 @@ class _SplashScreenState extends State<SplashScreen> {
     // Step 4: Verify authentication session
     setState(() {
       _progress = 1.0;
-      _statusMessage = 'System Ready';
-      _statusSubtext = 'Launching application workspace...';
+      _statusMessage = 'Financial Literacy Ready';
+      _statusSubtext = 'Launching your smart wealth companion...';
     });
 
     final token = await AuthService.getToken();
@@ -355,7 +355,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           ),
                           SizedBox(width: 6),
                           Text(
-                            'BANK MUSCAT PFM INTELLIGENCE',
+                            'FINANCIAL LITERACY & WEALTH INTELLIGENCE',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -369,7 +369,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     const SizedBox(height: 12),
 
                     Text(
-                      'Automated Statement Extraction & Multi-Tier Analytics',
+                      'Empowering Financial Literacy, Smart Budgeting & Wealth Awareness',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,

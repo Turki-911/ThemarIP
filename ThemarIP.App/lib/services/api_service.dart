@@ -57,18 +57,47 @@ class ApiService {
     return user;
   }
 
-  Future<UserModel> register(String email, String password, String fullName) async {
+  Future<Map<String, dynamic>> requestSignupOtp(String email) async {
+    final response = await _dio.post(
+      ApiConfig.requestSignupOtp,
+      data: {'email': email},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<UserModel> register(String email, String password, String fullName, {String? otp}) async {
     final response = await _dio.post(
       ApiConfig.register,
       data: {
         'email': email,
         'password': password,
         'fullName': fullName,
+        if (otp != null && otp.isNotEmpty) 'otp': otp,
       },
     );
     final user = UserModel.fromJson(response.data);
     await AuthService.saveSession(user);
     return user;
+  }
+
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    final response = await _dio.post(
+      ApiConfig.forgotPassword,
+      data: {'email': email},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> resetPassword(String email, String otp, String newPassword) async {
+    final response = await _dio.post(
+      ApiConfig.resetPassword,
+      data: {
+        'email': email,
+        'otp': otp,
+        'newPassword': newPassword,
+      },
+    );
+    return response.data as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> getShortcutsConfig() async {

@@ -6,12 +6,32 @@ namespace ThemarIP.Application.DTOs;
 public record RegisterRequestDto(
     string Email,
     string Password,
-    string FullName
+    string FullName,
+    string? Otp = null
+);
+
+public record SignupOtpRequestDto(
+    string Email
 );
 
 public record LoginRequestDto(
     string Email,
     string Password
+);
+
+public record ForgotPasswordRequestDto(
+    string Email
+);
+
+public record ResetPasswordRequestDto(
+    string Email,
+    string Otp,
+    string NewPassword
+);
+
+public record OtpResponseDto(
+    string Message,
+    string? PreviewOtp = null
 );
 
 public record AuthResponseDto(

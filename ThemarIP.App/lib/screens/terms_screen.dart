@@ -74,7 +74,7 @@ class _TermsScreenState extends State<TermsScreen> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Last updated: September 2026',
+                            'Last updated: October 2026',
                             style: TextStyle(
                               fontSize: 12,
                               color: AppTheme.textMuted,
@@ -82,9 +82,40 @@ class _TermsScreenState extends State<TermsScreen> {
                           ),
                           const Divider(height: 28, color: Colors.white10),
 
+                          // Beta Testing Phase Notice
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            margin: const EdgeInsets.only(bottom: 20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Icon(Icons.info_outline_rounded, color: Color(0xFFF59E0B), size: 20),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Active Beta Testing Phase: ThemarIP is undergoing active continuous updates. Occasional bugs, temporary glitches, or crashes may occur. The platform is continuously updated with enhancements.',
+                                    style: TextStyle(
+                                      color: Color(0xFFFDE68A),
+                                      fontSize: 12.5,
+                                      height: 1.45,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
                           _buildSectionTitle('1. Bank Statement Processing & Data Security'),
                           _buildSectionBody(
-                            'ThemarIP processes uploaded Bank Muscat card statements strictly to parse transactional records, determine merchant insights, and construct personal financial management (PFM) categorizations. All data ingestion is executed in secured database environments with tokenized identity.',
+                            'ThemarIP processes uploaded bank statements strictly to parse transactional records, determine merchant insights, and construct personal financial management (PFM) categorizations. All data ingestion is executed in secured database environments with tokenized identity.',
                           ),
 
                           _buildSectionTitle('2. User Privacy & Ownership'),
@@ -100,6 +131,11 @@ class _TermsScreenState extends State<TermsScreen> {
                           _buildSectionTitle('4. Account Credentials & Access'),
                           _buildSectionBody(
                             'You are responsible for safeguarding your login credentials. By continuing, you agree to report any unauthorized access immediately.',
+                          ),
+
+                          _buildSectionTitle('5. Beta Testing Phase & Continuous Updates'),
+                          _buildSectionBody(
+                            'ThemarIP is currently in an active testing and enhancement phase. As new features, banks, and statement parsing models are introduced, occasional bugs, errors, or unexpected crashes may occur. The application will receive regular, continuous updates to fix issues and optimize system stability. User feedback directly drives our ongoing development.',
                           ),
                         ],
                       ),

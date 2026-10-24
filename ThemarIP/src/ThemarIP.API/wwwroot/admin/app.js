@@ -7,12 +7,9 @@
 
 // Dynamic API Base URL for local & production tunnel hosting
 const THEMAR_API_BASE = (() => {
-  if (typeof window === 'undefined') return 'http://localhost:5267/api';
-  if (window.location.pathname.startsWith('/admin')) {
+  if (typeof window === 'undefined') return 'https://themarip.up.railway.app/api';
+  if (window.location.hostname && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
     return window.location.origin + '/api';
-  }
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:5267/api';
   }
   return 'https://themarip.up.railway.app/api';
 })();

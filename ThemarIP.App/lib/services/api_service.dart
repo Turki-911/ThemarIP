@@ -72,14 +72,21 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getUserStatus({String? userId, String? email}) async {
-    final response = await _dio.get(
-      '/auth/user-status',
-      queryParameters: {
-        if (userId != null && userId.isNotEmpty) 'userId': userId,
-        if (email != null && email.isNotEmpty) 'email': email,
-      },
-    );
-    return response.data as Map<String, dynamic>;
+    try {
+      final response = await _dio.get(
+        '/auth/user-status',
+        queryParameters: {
+          if (userId != null && userId.isNotEmpty) 'userId': userId,
+          if (email != null && email.isNotEmpty) 'email': email,
+        },
+      );
+      if (response.data is Map<String, dynamic>) {
+        return response.data as Map<String, dynamic>;
+      }
+      return {};
+    } catch (_) {
+      return {};
+    }
   }
 
   Future<Map<String, dynamic>> requestSignupOtp(String email) async {

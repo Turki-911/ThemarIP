@@ -14,40 +14,12 @@ class ApiConfig {
   static Future<void> loadSavedHost() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (kIsWeb) {
-        // On web, always clear any saved host so it routes via browser origin
-        await prefs.remove(_prefKeyHost);
-        _customHost = null;
-        return;
-      }
-      final saved = prefs.getString(_prefKeyHost);
-      if (saved != null && saved.trim().isNotEmpty) {
-        final val = saved.trim();
-        // Purge ANY trycloudflare domain and legacy IPs so app always routes to Railway
-        if (val.contains('trycloudflare.com') ||
-            val.contains('housing-janet-que-coordinated') ||
-            val.contains('upgrades-andrews-neutral-psychology') ||
-            val.contains('meal-graduated-cia-escape') ||
-            val.contains('opened-earned-advisor-load') ||
-            val.contains('then-eyes-comm-dicke') ||
-            val.contains('brick-concerned') ||
-            val.contains('slideshow-cup-stanford') ||
-            val.contains('sofa-renew-shaw') ||
-            val.contains('neural-proven-festivals') ||
-            val.contains('correction-josh') ||
-            val.contains('definitions-expertise-craft-pics') ||
-            val.contains('throwing-fighters-patch-immigration') ||
-            val.contains('showers-johnson-bits-describes') ||
-            val.contains('alot-adapters-acid-freelance') ||
-            val == '192.168.0.201' ||
-            val == '172.20.10.5') {
-          await prefs.remove(_prefKeyHost);
-          _customHost = null;
-        } else {
-          _customHost = val;
-        }
-      }
-    } catch (_) {}
+      // Always clear any legacy custom host so all devices connect reliably to live Railway HTTPS
+      await prefs.remove(_prefKeyHost);
+      _customHost = null;
+    } catch (_) {
+      _customHost = null;
+    }
   }
 
   /// Update and persist the backend server host/IP
@@ -78,21 +50,18 @@ class ApiConfig {
       if (origin.isNotEmpty && !origin.startsWith('http://localhost') && !origin.startsWith('http://127.0.0.1')) {
         return origin;
       }
-      return 'localhost';
     }
-    // Default to the live public HTTPS backend for all mobile devices (iOS & Android)
-    // so testers, family, and friends connect seamlessly over public internet (4G/5G/Wi-Fi).
     return livePublicApiUrl;
   }
 
-  /// Returns the full base API URL (e.g. http://172.20.10.5:5267/api)
+  /// Returns the full base API URL (always defaults to live Railway HTTPS unless hosted directly on :5267)
   static String get baseUrl {
     if (kIsWeb) {
       final origin = Uri.base.origin;
       if (origin.isNotEmpty && !origin.startsWith('http://localhost') && !origin.startsWith('http://127.0.0.1')) {
         return '$origin/api';
       }
-      return 'http://localhost:5267/api';
+      return livePublicApiUrl;
     }
 
     if (_customHost != null && _customHost!.isNotEmpty) {

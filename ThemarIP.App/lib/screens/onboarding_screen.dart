@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import '../config/api_config.dart';
 import '../config/app_theme.dart';
+import '../services/auth_service.dart';
 import '../services/language_service.dart';
+import '../services/sms_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  final bool isSplashEntry;
+  const OnboardingScreen({super.key, this.isSplashEntry = false});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -12,6 +16,38 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _isLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initBootstrap();
+  }
+
+  Future<void> _initBootstrap() async {
+    await ApiConfig.loadSavedHost();
+    final token = await AuthService.getToken();
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = token != null && token.isNotEmpty;
+      });
+    }
+    if (token != null && token.isNotEmpty) {
+      await SmsService.refreshSenders();
+    }
+  }
+
+  Future<void> _finishOnboarding({bool goToRegister = false}) async {
+    final token = await AuthService.getToken();
+    if (!mounted) return;
+    if (token != null && token.isNotEmpty) {
+      Navigator.of(context).pushReplacementNamed('/categories');
+    } else if (goToRegister) {
+      Navigator.of(context).pushReplacementNamed('/terms');
+    } else {
+      Navigator.of(context).pushReplacementNamed('/login');
+    }
+  }
 
   void _nextPage() {
     if (_currentPage < 1) {
@@ -20,7 +56,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      Navigator.of(context).pushReplacementNamed('/terms');
+      _finishOnboarding();
     }
   }
 
@@ -108,9 +144,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             ),
                             const SizedBox(width: 6),
                             TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pushReplacementNamed('/terms');
-                              },
+                              onPressed: () => _finishOnboarding(),
                               child: Text(
                                 LanguageService.tr('skip'),
                                 style: const TextStyle(
@@ -187,6 +221,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ),
                     ),
+                    if (_currentPage == 1 && !_isLoggedIn) ...[
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: () => _finishOnboarding(goToRegister: true),
+                        child: Text(
+                          '${LanguageService.tr('no_account')} ${LanguageService.tr('create_account')}',
+                          style: const TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

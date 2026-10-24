@@ -500,7 +500,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       });
       _fetchLiveDbCount();
       _showToast('Signed out successfully');
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil('/onboarding', (route) => false);
     }
   }
 

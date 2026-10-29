@@ -101,5 +101,54 @@ public static class DbInitializer
 
         // Seed all PFM reference data (idempotent — skips if rows exist)
         await PfmDataSeeder.SeedAsync(context);
+
+        // Ensure all Omani banks have an active BankSmsRule entry so non-Bank Muscat users (NBO, Ahli Bank, Dhofar, OAB, Sohar, Nizwa, Alizz) are never rejected with NoRule
+        var existingBankCodes = await context.BankSmsRules.Select(r => r.BankCode).ToListAsync();
+        var defaultBankRules = new (string Code, string Name, string Senders, string Sample)[]
+        {
+            ("NBO", "National Bank of Oman", "NBO,National Bank of Oman,NBO-ALERT", "Your NBO Card ending 1234 was used for OMR 5.200 at STARBUCKS on 16/10/2026. Avl Bal OMR 340.100"),
+            ("AHLI_BANK", "Ahli Bank Oman", "Ahli Bank,AhliBank,AHLIBANK,Ahli Bank Oman", "Your Ahli Bank Card was used for OMR 12.500 at LULU HYPERMARKET on 16/10/2026. Avl Bal OMR 210.000"),
+            ("BANK_DHOFAR", "Bank Dhofar", "Bank Dhofar,BankDhofar,BANKDHOFAR", "Your Bank Dhofar Card was used for OMR 4.800 at SHELL on 16/10/2026. Avl Bal OMR 195.400"),
+            ("OAB", "Oman Arab Bank", "OAB,Oman Arab Bank,OmanArabBank", "Your OAB Card was used for OMR 8.000 at CARREFOUR on 16/10/2026. Avl Bal OMR 412.000"),
+            ("SOHAR_INTL", "Sohar International", "SoharInt,Sohar International,SOHAR", "Your Sohar Card was used for OMR 6.300 at TALABAT on 16/10/2026. Avl Bal OMR 150.250"),
+            ("BANK_NIZWA", "Bank Nizwa", "Bank Nizwa,BankNizwa,BANKNIZWA", "Your Bank Nizwa Card was used for OMR 3.100 at COSTA COFFEE on 16/10/2026. Avl Bal OMR 280.000"),
+            ("ALIZZ_ISLAMIC", "Alizz Islamic Bank", "Alizz,Alizz Islamic,ALIZZ", "Your Alizz Card was used for OMR 15.000 at OMAN OIL on 16/10/2026. Avl Bal OMR 510.000")
+        };
+
+        var genericPattern = @"(?:used\s+for|debited\s+(?:by|with|for)|spent|paid|amount)\s*(?:(?<currency>[A-Z]{2,3})\s*)?(?<amount>[\d,]+(?:\.\d+)?)(?:.*?\bat\s+(?<merchant>(?:(?!\s+on\s+\d|\s+Avl|\.\s*Avl).)+?))?(?:\s+on\s+(?<date>\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?))?(?:.*?(?:Avl\s*Bal(?:ance)?|Available\s+(?:limit|balance))\s*(?:[A-Z]{2,3}\s*)?(?<balance>[\d,]+(?:\.\d+)?))?";
+        var genericMappings = "{\"amount\":\"amount\",\"merchant\":\"merchant\",\"date\":\"date\",\"balance\":\"balance\",\"currency\":\"currency\"}";
+
+        bool addedAnyBankRule = false;
+        foreach (var b in defaultBankRules)
+        {
+            if (!existingBankCodes.Any(c => string.Equals(c, b.Code, StringComparison.OrdinalIgnoreCase)))
+            {
+                context.BankSmsRules.Add(new ThemarIP.Domain.Entities.Sms.BankSmsRule
+                {
+                    Id = Guid.NewGuid(),
+                    BankCode = b.Code,
+                    BankName = b.Name,
+                    SenderIds = b.Senders,
+                    Pattern = genericPattern,
+                    FieldMappings = genericMappings,
+                    SampleMessage = b.Sample,
+                    Patterns = $"[{{\"name\":\"Card / Account Transaction\",\"sampleMessage\":\"{b.Sample}\",\"pattern\":{System.Text.Json.JsonSerializer.Serialize(genericPattern)},\"fieldMappings\":{genericMappings},\"defaultType\":\"DEBIT\"}}]",
+                    DebitKeywords = "used,debited,withdrawn,purchase,spent,paid,sent",
+                    CreditKeywords = "credited,received,deposit,refund,salary",
+                    DefaultType = "DEBIT",
+                    DefaultCurrency = "OMR",
+                    DateFormats = "dd/MM/yyyy HH:mm:ss|dd/MM/yy HH:mm:ss|dd/MM/yyyy HH:mm|dd/MM/yy HH:mm|dd/MM/yyyy|dd/MM/yy",
+                    IsActive = true,
+                    Version = 1,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    UpdatedBy = "System Seeder"
+                });
+                addedAnyBankRule = true;
+            }
+        }
+        if (addedAnyBankRule)
+        {
+            await context.SaveChangesAsync();
+        }
     }
 }

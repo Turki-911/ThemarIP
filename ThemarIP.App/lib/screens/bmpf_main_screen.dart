@@ -222,8 +222,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   void initState() {
     super.initState();
     _selectedPageIndex = widget.initialPageIndex;
-    _loadUser();
-    _fetchLiveDbCount();
+    _initScreenData();
     SmsService.isPaused().then((paused) {
       if (mounted) setState(() => _smsPaused = paused);
     });
@@ -231,13 +230,17 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       await Future.delayed(const Duration(milliseconds: 600));
       if (mounted) SmsService.start(context);
     });
-    _fetchCategoryHierarchy().then((_) {
-      if (mounted && !_hasUploadedStatement) {
-        setState(() {
-          _selectedPageIndex = 2; // First time user must not bypass Extractor
-        });
-      }
-    });
+  }
+
+  Future<void> _initScreenData() async {
+    await _loadUser();
+    if (!mounted) return;
+    await _fetchCategoryHierarchy();
+    if (mounted && !_hasUploadedStatement) {
+      setState(() {
+        _selectedPageIndex = 2; // First time user must not bypass Extractor
+      });
+    }
   }
 
   @override
@@ -590,6 +593,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     if (_pdfParseResult == null) return;
     _showLoading('Processing ${_selectedBank.nameEn} statement transactions...');
     try {
+      _currentUser ??= await AuthService.getUser();
       final payload = Map<String, dynamic>.from(_pdfParseResult!.rawJson);
       payload['bankCode'] = _selectedBank.code;
       payload['bankName'] = _selectedBank.nameEn;

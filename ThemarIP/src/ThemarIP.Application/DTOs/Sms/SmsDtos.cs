@@ -8,8 +8,13 @@ public class SmsIngestRequestDto
 {
     public string Sender { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public Guid? UserId { get; set; }
     /// <summary>Device receive time, epoch milliseconds (optional).</summary>
     public long? ReceivedAtMs { get; set; }
+
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? ExtraFields { get; set; }
 }
 
 public class SmsExtractedDto

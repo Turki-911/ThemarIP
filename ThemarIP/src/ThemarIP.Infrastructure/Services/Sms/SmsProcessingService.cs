@@ -35,8 +35,61 @@ public class SmsProcessingService : ISmsProcessingService
 
     public async Task<SmsIngestResultDto> IngestAsync(Guid userId, SmsIngestRequestDto request)
     {
-        var sender = (request.Sender ?? string.Empty).Trim();
-        var message = SmsParsingEngine.Normalize(request.Message);
+        var rawSender = request.Sender;
+        var rawMsg = request.Message;
+
+        if (request.ExtraFields != null)
+        {
+            foreach (var kv in request.ExtraFields)
+            {
+                var k = kv.Key.Trim().ToLowerInvariant();
+                var val = kv.Value.ValueKind == JsonValueKind.String ? kv.Value.GetString() : kv.Value.ToString();
+                if (string.IsNullOrWhiteSpace(val)) continue;
+
+                if (string.IsNullOrWhiteSpace(rawSender) && (k == "sender" || k == "from" || k == "bank" || k == "address"))
+                {
+                    rawSender = val;
+                }
+                else if (string.IsNullOrWhiteSpace(rawMsg) && (k == "message" || k == "text" || k == "body" || k == "content" || k == "sms" || k == "msg" || k == "input" || k == "shortcut input"))
+                {
+                    rawMsg = val;
+                }
+            }
+
+            // If message is still empty, pick any non-empty extra field that looks like an SMS body
+            if (string.IsNullOrWhiteSpace(rawMsg))
+            {
+                foreach (var kv in request.ExtraFields)
+                {
+                    var val = kv.Value.ValueKind == JsonValueKind.String ? kv.Value.GetString() : kv.Value.ToString();
+                    if (!string.IsNullOrWhiteSpace(val) && val.Length > 15 && !string.Equals(val, rawSender, StringComparison.OrdinalIgnoreCase))
+                    {
+                        rawMsg = val;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Allow explicit user override if Email or UserId is provided in payload (e.g. shared iOS Shortcut template)
+        if (request.UserId.HasValue && request.UserId.Value != Guid.Empty)
+        {
+            var explicitUser = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId.Value);
+            if (explicitUser != null) userId = explicitUser.Id;
+        }
+        else if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var normEmail = request.Email.Trim().ToLowerInvariant();
+            var explicitUser = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normEmail);
+            if (explicitUser != null) userId = explicitUser.Id;
+        }
+
+        var sender = (rawSender ?? string.Empty).Trim();
+        var message = SmsParsingEngine.Normalize(rawMsg);
+        if (string.IsNullOrWhiteSpace(sender) && !string.IsNullOrWhiteSpace(message))
+        {
+            sender = "bank muscat";
+        }
         var received = request.ReceivedAtMs.HasValue
             ? DateTimeOffset.FromUnixTimeMilliseconds(request.ReceivedAtMs.Value)
             : DateTimeOffset.UtcNow;
@@ -85,11 +138,6 @@ public class SmsProcessingService : ISmsProcessingService
                     .ToList();
             }
 
-            if (rules.Count == 0)
-            {
-                return await Finish(entry, "NoRule", $"No active rule for sender '{sender}'.");
-            }
-
             BankSmsRule? used = null;
             SmsRuleTestResultDto? parsed = null;
             foreach (var r in rules)
@@ -98,22 +146,72 @@ public class SmsProcessingService : ISmsProcessingService
                 if (res != null) { used = r; parsed = res; break; }
             }
 
-            if (used == null || parsed?.Extracted == null)
+            SmsExtractedDto? ex = parsed?.Extracted;
+            var resolvedBank = used != null
+                ? BankCatalog.Canonical(used.BankCode, used.BankName)
+                : (selection.Count > 0 ? selection[0] : BankCatalog.Canonical(null, sender));
+
+            // Fallback to smart Omani multi-bank SMS parser if no strict regex rule matched (excluding OTPs & promos)
+            if (ex == null || ex.Amount <= 0)
+            {
+                bool isPromoOrOtp = message.Contains("% off", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("UNSUB", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("Valid until", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("OTP", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("verification code", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("one time password", StringComparison.OrdinalIgnoreCase);
+
+                if (!isPromoOrOtp)
+                {
+                    var smartParsed = await _notifications.ParseNotificationAsync(new IngestNotificationRequestDto
+                    {
+                        SourceType = "SMS",
+                        EmailSender = sender,
+                        RawMessage = message,
+                        UserId = userId,
+                        AutoConfirm = false
+                    });
+
+                    if (smartParsed != null && smartParsed.Amount > 0)
+                    {
+                        resolvedBank = BankCatalog.Canonical(null, !string.IsNullOrWhiteSpace(smartParsed.BankName) ? smartParsed.BankName : sender);
+                        used ??= rules.FirstOrDefault() ?? allRules.FirstOrDefault(r => string.Equals(r.BankCode, resolvedBank.Code, StringComparison.OrdinalIgnoreCase));
+                        ex = new SmsExtractedDto
+                        {
+                            Amount = smartParsed.Amount,
+                            Currency = string.IsNullOrWhiteSpace(smartParsed.Currency) ? "OMR" : smartParsed.Currency,
+                            Type = string.IsNullOrWhiteSpace(smartParsed.Direction) ? "DEBIT" : smartParsed.Direction.ToUpperInvariant(),
+                            Merchant = smartParsed.MatchedMerchant ?? smartParsed.Narration,
+                            Narration = message,
+                            Reference = string.IsNullOrWhiteSpace(smartParsed.AccountReference) ? null : smartParsed.AccountReference,
+                            Date = smartParsed.TransactionDate,
+                            Balance = smartParsed.BalanceAfter
+                        };
+                    }
+                }
+            }
+
+            if (ex == null)
+            {
+                if (rules.Count == 0)
+                    return await Finish(entry, "NoRule", $"No active rule for sender '{sender}'.");
                 return await Finish(entry, "NoMatch", "Message did not match any active rule for this sender.");
+            }
 
-            entry.RuleId = used.Id;
-            entry.RuleVersion = used.Version;
-            entry.ExtractedJson = JsonSerializer.Serialize(parsed.Extracted, Json);
-            entry.Reference = Truncate(parsed.Extracted.Reference, 128);
+            if (used != null)
+            {
+                entry.RuleId = used.Id;
+                entry.RuleVersion = used.Version;
+            }
+            entry.ExtractedJson = JsonSerializer.Serialize(ex, Json);
+            entry.Reference = Truncate(ex.Reference, 128);
 
-            var invalid = SmsParsingEngine.Validate(parsed.Extracted);
+            var invalid = SmsParsingEngine.Validate(ex);
             if (invalid != null)
-                return await Finish(entry, "ValidationFailed", invalid, parsed.Extracted);
-
-            var ex = parsed.Extracted;
+                return await Finish(entry, "ValidationFailed", invalid, ex);
 
             // Reference-based duplicate (same bank reference already saved for this user/rule).
-            if (!string.IsNullOrEmpty(ex.Reference) &&
+            if (!string.IsNullOrEmpty(ex.Reference) && used != null &&
                 await _db.SmsProcessingLogs.AnyAsync(l => l.UserId == userId && l.RuleId == used.Id && l.Reference == ex.Reference && l.Status == "Saved"))
                 return await Finish(entry, "Duplicate", $"Reference {ex.Reference} already processed.", ex);
 
@@ -124,7 +222,7 @@ public class SmsProcessingService : ISmsProcessingService
                 UserId = userId,
                 Transaction = new ParsedNotificationResultDto
                 {
-                    BankName = BankCatalog.Canonical(used.BankCode, used.BankName).Name,
+                    BankName = resolvedBank.Name,
                     SourceType = "SMS",
                     Amount = ex.Amount,
                     Currency = ex.Currency,
@@ -138,7 +236,7 @@ public class SmsProcessingService : ISmsProcessingService
 
             // The shared save path defaults bank fields; stamp the real bank on the row we just created.
             var tx = await _db.PfmTransactions.FirstOrDefaultAsync(t => t.Id == txId);
-            var bank = BankCatalog.Canonical(used.BankCode, used.BankName);
+            var bank = resolvedBank;
             if (tx != null)
             {
                 tx.BankName = bank.Name;
@@ -224,7 +322,23 @@ public class SmsProcessingService : ISmsProcessingService
                 if (filtered.Count > 0) rules = filtered;
             }
         }
-        return rules.Select(r => r.SenderIds).SelectMany(SplitSenders).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList();
+        var defaultOmaniSenders = new[]
+        {
+            "bank muscat", "BankMuscat", "BM-ALERT",
+            "NBO", "National Bank of Oman",
+            "Ahli Bank", "AhliBank",
+            "Bank Dhofar", "BankDhofar",
+            "OAB", "Oman Arab Bank", "OmanArabBank",
+            "SoharInt", "Sohar International",
+            "Bank Nizwa", "BankNizwa",
+            "Alizz", "Alizz Islamic", "Meethaq"
+        };
+        return rules.Select(r => r.SenderIds)
+            .SelectMany(SplitSenders)
+            .Concat(defaultOmaniSenders)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .ToList();
     }
 
     public SmsRuleTestResultDto Test(SmsRuleTestRequestDto request) =>

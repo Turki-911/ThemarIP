@@ -49,6 +49,15 @@ public class StatementsController : ControllerBase
 
         try
         {
+            if (!request.UserId.HasValue || request.UserId.Value == System.Guid.Empty)
+            {
+                var claimId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (System.Guid.TryParse(claimId, out var parsedUserId))
+                {
+                    request.UserId = parsedUserId;
+                }
+            }
+
             var success = await _extractionService.ConfirmAndImportAsync(request);
             if (success) return Ok(new { message = "Statement imported successfully." });
             return BadRequest("Import failed.");
@@ -932,8 +941,17 @@ public class StatementsController : ControllerBase
         var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.CategoryRules);
         var activeRules = rules.Where(r => r.IsActive).OrderByDescending(r => r.Priority).ToList();
 
+        if (!userId.HasValue || userId.Value == System.Guid.Empty)
+        {
+            var claimId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (System.Guid.TryParse(claimId, out var parsedUserId))
+            {
+                userId = parsedUserId;
+            }
+        }
+
         var txQuery = context.PfmTransactions.AsQueryable();
-        if (userId.HasValue)
+        if (userId.HasValue && userId.Value != System.Guid.Empty)
         {
             txQuery = txQuery.Where(t => t.UserId == userId.Value);
         }
@@ -1129,9 +1147,18 @@ public class StatementsController : ControllerBase
         [FromQuery] System.Guid? userId,
         [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
     {
+        if (!userId.HasValue || userId.Value == System.Guid.Empty)
+        {
+            var claimId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (System.Guid.TryParse(claimId, out var parsedUserId))
+            {
+                userId = parsedUserId;
+            }
+        }
+
         var txQuery = context.PfmTransactions.AsQueryable();
         ThemarIP.Domain.Entities.User? user = null;
-        if (userId.HasValue)
+        if (userId.HasValue && userId.Value != System.Guid.Empty)
         {
             txQuery = txQuery.Where(t => t.UserId == userId.Value);
             user = await context.Users.FindAsync(userId.Value);
@@ -1489,6 +1516,15 @@ public class StatementsController : ControllerBase
         if (dto.Transaction == null || dto.Transaction.Amount <= 0)
             return BadRequest(new { message = "Valid transaction data is required to confirm." });
 
+        if (!dto.UserId.HasValue || dto.UserId.Value == System.Guid.Empty)
+        {
+            var claimId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (System.Guid.TryParse(claimId, out var parsedUserId))
+            {
+                dto.UserId = parsedUserId;
+            }
+        }
+
         var txId = await _notificationParser.ConfirmAndSaveNotificationAsync(dto);
         return Ok(new { success = true, transactionId = txId, message = "Transaction saved to themarip.db successfully." });
     }
@@ -1498,6 +1534,15 @@ public class StatementsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(dto.RawMessage) && string.IsNullOrWhiteSpace(dto.EmailSubject))
             return BadRequest(new { message = "Message content or email subject is required." });
+
+        if (!dto.UserId.HasValue || dto.UserId.Value == System.Guid.Empty)
+        {
+            var claimId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (System.Guid.TryParse(claimId, out var parsedUserId))
+            {
+                dto.UserId = parsedUserId;
+            }
+        }
 
         dto.AutoConfirm = true;
         var result = await _notificationParser.ParseNotificationAsync(dto);

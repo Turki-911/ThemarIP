@@ -41,6 +41,19 @@ public class BankMuscatPdfParser : IBankMuscatPdfParser
                 ParsePageTransactions(words, rawExtractedTransactions);
             }
 
+            if (rawExtractedTransactions.Count == 0)
+            {
+                for (int pageNum = 1; pageNum <= document.NumberOfPages; pageNum++)
+                {
+                    var page = document.GetPage(pageNum);
+                    var words = page.GetWords().ToList();
+                    if (words.Any())
+                    {
+                        ParsePageTransactionsFlexibleFallback(words, rawExtractedTransactions);
+                    }
+                }
+            }
+
             result.Transactions = rawExtractedTransactions;
             ReconcileAndValidateBalances(result);
         }
@@ -254,6 +267,81 @@ public class BankMuscatPdfParser : IBankMuscatPdfParser
                 IsBalanceValid = true,
                 ExtractionStatus = "PASS",
                 ExtractionConfidence = 100
+            });
+        }
+    }
+
+    private static readonly Regex FlexibleDateRegex = new(@"^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}[-/ ][A-Za-z]{3}[-/ ]\d{2,4})$", RegexOptions.Compiled);
+    private static readonly Regex FlexibleAmountRegex = new(@"^-?[\d,]+\.\d{2,3}$", RegexOptions.Compiled);
+
+    private void ParsePageTransactionsFlexibleFallback(List<Word> words, List<ParsedTransactionDto> transactions)
+    {
+        var lines = words
+            .GroupBy(w => Math.Round(w.BoundingBox.Bottom / 4.0) * 4.0)
+            .OrderByDescending(g => g.Key)
+            .ToList();
+
+        foreach (var lineGroup in lines)
+        {
+            var lineWords = lineGroup.OrderBy(w => w.BoundingBox.Left).ToList();
+            if (lineWords.Count < 3) continue;
+
+            var firstDateWord = lineWords.FirstOrDefault(w => FlexibleDateRegex.IsMatch(w.Text.Trim()));
+            if (firstDateWord == null) continue;
+
+            var numericWords = lineWords
+                .Where(w => w.BoundingBox.Left > firstDateWord.BoundingBox.Right + 20 && FlexibleAmountRegex.IsMatch(w.Text.Trim()))
+                .ToList();
+
+            if (numericWords.Count == 0) continue;
+
+            if (!DateTime.TryParse(firstDateWord.Text.Trim(), out var postDate))
+            {
+                postDate = DateTime.UtcNow.Date;
+            }
+
+            decimal amount = 0m;
+            decimal balance = 0m;
+            if (numericWords.Count >= 2)
+            {
+                decimal.TryParse(numericWords[numericWords.Count - 2].Text.Replace(",", "").TrimStart('-'), out amount);
+                decimal.TryParse(numericWords[numericWords.Count - 1].Text.Replace(",", ""), out balance);
+            }
+            else
+            {
+                decimal.TryParse(numericWords[0].Text.Replace(",", "").TrimStart('-'), out amount);
+            }
+
+            if (amount <= 0) continue;
+
+            var firstNumLeft = numericWords.First().BoundingBox.Left;
+            var narrationTokens = lineWords
+                .Where(w => w.BoundingBox.Left > firstDateWord.BoundingBox.Right + 2 && w.BoundingBox.Right < firstNumLeft - 2)
+                .Where(w => !FlexibleDateRegex.IsMatch(w.Text.Trim()))
+                .Select(w => w.Text.Trim())
+                .ToList();
+
+            var narration = string.Join(" ", narrationTokens).Trim();
+            if (string.IsNullOrWhiteSpace(narration)) narration = "Account Transaction";
+
+            var isCredit = narration.Contains("CREDIT", StringComparison.OrdinalIgnoreCase)
+                || narration.Contains("SALARY", StringComparison.OrdinalIgnoreCase)
+                || narration.Contains("RECEIVED", StringComparison.OrdinalIgnoreCase)
+                || narration.Contains("DEPOSIT", StringComparison.OrdinalIgnoreCase);
+
+            transactions.Add(new ParsedTransactionDto
+            {
+                PostDate = postDate,
+                ValueDate = postDate,
+                Narration = narration,
+                Direction = isCredit ? "CREDIT" : "DEBIT",
+                Amount = amount,
+                Debit = isCredit ? null : amount,
+                Credit = isCredit ? amount : null,
+                Balance = balance,
+                IsBalanceValid = true,
+                ExtractionStatus = "PASS",
+                ExtractionConfidence = 95
             });
         }
     }

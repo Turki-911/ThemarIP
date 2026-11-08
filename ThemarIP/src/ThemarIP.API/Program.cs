@@ -37,23 +37,24 @@ builder.Services.AddCors(options =>
     });
 });
 
-// 2. Add Database Context (Supports PostgreSQL or Sqlite)
-var dbProvider = builder.Configuration["DatabaseProvider"] ?? "Sqlite";
-if (dbProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+// 2. Add Database Context (Supports Sqlite with persistent volume or bundled themarip.db)
+var sqliteConnectionString = builder.Configuration.GetConnectionString("SqliteConnection") ?? "Data Source=themarip.db";
+var railwayVolumePath = Environment.GetEnvironmentVariable("RAILWAY_VOLUME_MOUNT_PATH");
+if (!string.IsNullOrEmpty(railwayVolumePath) && System.IO.Directory.Exists(railwayVolumePath))
 {
-    var pgConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(pgConnectionString, b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
-}
-else
-{
-    var sqliteConnectionString = builder.Configuration.GetConnectionString("SqliteConnection") ?? "Data Source=themarip.db";
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    var volumeDbFile = System.IO.Path.Combine(railwayVolumePath, "themarip.db");
+    if (!System.IO.File.Exists(volumeDbFile) && System.IO.File.Exists("themarip.db"))
     {
-        options.UseSqlite(sqliteConnectionString, b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
-        options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
-    });
+        System.IO.File.Copy("themarip.db", volumeDbFile, overwrite: false);
+    }
+    sqliteConnectionString = $"Data Source={volumeDbFile}";
 }
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+{
+    options.UseSqlite(sqliteConnectionString, b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
+    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+});
 
 builder.Services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
 

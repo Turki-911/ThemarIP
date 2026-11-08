@@ -2,22 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Gen Z Purple Theme Colors
-  static const Color bgDark = Color(0xFF0B0813);
-  static const Color bgSurface = Color(0xFF181128);
-  static const Color bgCard = Color(0xFF22173B);
-  static const Color bgCardHover = Color(0xFF2E1F4D);
+  // Clean Modern Light Theme Colors
+  static const Color bgDark = Color(0xFFF8FAFC);
+  static const Color bgSurface = Color(0xFFF1F5F9);
+  static const Color bgCard = Color(0xFFFFFFFF);
+  static const Color bgCardHover = Color(0xFFF1F5F9);
 
-  static const Color primaryPurple = Color(0xFF8B5CF6);
-  static const Color electricViolet = Color(0xFF7C3AED);
-  static const Color neonPink = Color(0xFFEC4899);
-  static const Color cyberCyan = Color(0xFF06B6D4);
+  static const Color primaryPurple = Color(0xFF7C3AED);
+  static const Color electricViolet = Color(0xFF6D28D9);
+  static const Color neonPink = Color(0xFFDB2777);
+  static const Color cyberCyan = Color(0xFF0284C7);
   static const Color emeraldGreen = Color(0xFF10B981);
-  static const Color amberWarning = Color(0xFFF59E0B);
+  static const Color amberWarning = Color(0xFFD97706);
 
-  static const Color textLight = Color(0xFFF8FAFC);
-  static const Color textMuted = Color(0xFF94A3B8);
-  static const Color borderGlow = Color(0x338B5CF6);
+  static const Color textLight = Color(0xFF0F172A);
+  static const Color textMuted = Color(0xFF64748B);
+  static const Color borderGlow = Color(0xFFE2E8F0);
 
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(
@@ -27,28 +27,30 @@ class AppTheme {
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF23183E), Color(0xFF1A1230)],
+    colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFC)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static ThemeData get darkTheme {
+  static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       scaffoldBackgroundColor: bgDark,
       primaryColor: primaryPurple,
-      colorScheme: const ColorScheme.dark(
+      colorScheme: const ColorScheme.light(
         primary: primaryPurple,
         secondary: neonPink,
-        surface: bgSurface,
+        surface: bgCard,
+        onSurface: textLight,
       ),
-      textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).apply(
+      textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme).apply(
         bodyColor: textLight,
         displayColor: textLight,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: bgDark,
+        backgroundColor: bgCard,
+        foregroundColor: textLight,
         elevation: 0,
         centerTitle: false,
         iconTheme: IconThemeData(color: textLight),
@@ -81,4 +83,6 @@ class AppTheme {
       ),
     );
   }
+
+  static ThemeData get darkTheme => lightTheme;
 }

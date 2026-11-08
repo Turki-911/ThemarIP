@@ -79,6 +79,10 @@
         <i data-lucide="activity"></i><span>Transactions</span>
         <span class="count-badge" id="nav-uncategorized-count">0</span>
       </a>
+      <a href="#" class="nav-item" data-view="view-tx-msg-parser">
+        <i data-lucide="wand-sparkles"></i><span>Transaction Message Parser</span>
+        <span class="count-badge nav-badge-alert" id="nav-tx-parser-review-count">NEW</span>
+      </a>
 
       <div class="nav-section-title">CATEGORIZATION</div>
       <a href="#" class="nav-item" data-view="view-categories">
@@ -849,6 +853,149 @@
       </div>
     </section>
 
+    <!-- =========================================================== -->
+    <!-- VIEW 11: TRANSACTION MESSAGE PARSER (SEPARATE MODULE)       -->
+    <!-- =========================================================== -->
+    <section id="view-tx-msg-parser" class="content-view hidden">
+      <div class="view-header">
+        <div>
+          <h2 class="section-title">Bank Transaction Message Parser</h2>
+          <p class="section-subtitle">Database-driven bank SMS &amp; statement extraction rules, clean user-friendly descriptions, confidence scoring, deduplication, and manual review queue.</p>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" id="btn-txp-backfill">
+            <i data-lucide="refresh-cw"></i> Re-parse All Transactions
+          </button>
+          <button class="btn btn-primary" id="btn-txp-add-rule">
+            <i data-lucide="plus"></i> Add Extraction Rule
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Row -->
+      <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px;">
+        <div class="kpi-card">
+          <div class="kpi-header"><span class="kpi-label">Active DB Rules</span><div class="kpi-icon icon-purple"><i data-lucide="code-2"></i></div></div>
+          <div class="kpi-value" id="txp-kpi-rules">0 / 0</div>
+          <div class="kpi-sub">Bank Muscat + Extensible Omani Banks</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header"><span class="kpi-label">Parsed Messages</span><div class="kpi-icon icon-blue"><i data-lucide="file-check-2"></i></div></div>
+          <div class="kpi-value" id="txp-kpi-parsed">0</div>
+          <div class="kpi-sub">Clean description + Original preserved</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header"><span class="kpi-label">Auto-Approved</span><div class="kpi-icon icon-green"><i data-lucide="check-circle"></i></div></div>
+          <div class="kpi-value" id="txp-kpi-approved">0</div>
+          <div class="kpi-sub">High-confidence structured match</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header"><span class="kpi-label">Needs Manual Review</span><div class="kpi-icon icon-amber"><i data-lucide="alert-triangle"></i></div></div>
+          <div class="kpi-value" id="txp-kpi-review">0</div>
+          <div class="kpi-sub">Unrecognized or low confidence (&lt;75%)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header"><span class="kpi-label">Avg Confidence</span><div class="kpi-icon icon-blue"><i data-lucide="gauge"></i></div></div>
+          <div class="kpi-value" id="txp-kpi-confidence">0%</div>
+          <div class="kpi-sub">Balance &amp; fee clauses isolated</div>
+        </div>
+      </div>
+
+      <!-- Live Parser Sandbox -->
+      <div class="table-container-card" style="padding:20px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+          <div>
+            <h3 style="font-size:15px;font-weight:700;margin:0;">Live Bank SMS &amp; Statement Parser Sandbox</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0 0;">Test any Bank Muscat or Omani bank SMS to verify structured extraction (8 fields) and generated user-friendly description.</p>
+          </div>
+          <div id="txp-preset-buttons" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+        <div class="form-row" style="align-items:flex-end;">
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">Sender ID / Bank</label>
+            <input type="text" id="txp-sandbox-sender" class="form-control" value="BankMuscat" placeholder="e.g. BankMuscat, NBO, BankDhofar">
+          </div>
+          <div class="form-group" style="flex:4;margin-bottom:0;">
+            <label class="form-label">Raw Bank SMS or Statement Narration</label>
+            <input type="text" id="txp-sandbox-message" class="form-control" value="Dear Customer, You have sent OMR 100.000 to ALI #######################AHRI from your a/c 0468XXXXXXXX0033 on 26/10/2026 18:25:24 using Mobile Payment services. Txn Id BMCT015840785480. Avl Bal OMR 11.711.">
+          </div>
+          <button type="button" class="btn btn-primary" id="btn-txp-run-sandbox" style="height:40px;">
+            <i data-lucide="sparkles"></i> Parse Message
+          </button>
+        </div>
+        <div id="txp-sandbox-result" style="display:none;"></div>
+      </div>
+
+      <!-- Database Extraction Rules Table -->
+      <div class="table-container-card" style="margin-bottom:20px;">
+        <div class="card-header" style="padding:16px 20px;">
+          <div class="card-title">
+            <h3>Database Bank Message Extraction Rules</h3>
+            <span>Stored in <code>BankMessageParserRules</code> — add new Omani banks or SMS patterns without modifying Flutter or backend code</span>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Bank</th>
+                <th>Rule Name &amp; Senders</th>
+                <th>Transaction Type</th>
+                <th>Direction</th>
+                <th>Description Template</th>
+                <th>Regex Extraction Pattern</th>
+                <th>Confidence</th>
+                <th>Status</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-txp-rules"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Parsed Transaction Messages & Manual Review Queue -->
+      <div class="table-container-card">
+        <div class="card-header" style="padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div class="card-title">
+            <h3>Parsed Transaction Descriptions &amp; Manual Review Queue</h3>
+            <span>Shows generated user-friendly description alongside structured fields and preserved original SMS</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="txp-filter-bank" class="form-control" style="width:180px;">
+              <option value="ALL">All Banks</option>
+              <option value="BANK_MUSCAT">Bank Muscat</option>
+              <option value="NBO">National Bank of Oman</option>
+              <option value="BANK_DHOFAR">Bank Dhofar</option>
+            </select>
+            <select id="txp-filter-status" class="form-control" style="width:190px;">
+              <option value="ALL">All Statuses</option>
+              <option value="NEEDS_REVIEW">Needs Manual Review</option>
+              <option value="AUTO_APPROVED">Auto-Approved</option>
+              <option value="MANUALLY_REVIEWED">Manually Reviewed</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Generated Description</th>
+                <th>Bank &amp; Type</th>
+                <th>Direction &amp; Amount</th>
+                <th>Sender / Recipient</th>
+                <th>Account / Ref / Date</th>
+                <th>Original Bank Message (Preserved)</th>
+                <th>Confidence</th>
+                <th style="text-align:right;">Review</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-txp-messages"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -1246,6 +1393,161 @@
 </div>
 
 <!-- ============================================================ -->
+<!-- TRANSACTION MESSAGE PARSER MODALS                            -->
+<!-- ============================================================ -->
+<div id="txp-rule-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <h2 class="modal-title" id="txp-rule-modal-title">Add Bank Extraction Rule</h2>
+      <button class="modal-close" id="txp-rule-modal-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="txp-rule-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Bank Name *</label>
+          <select id="txp-rule-bank" class="form-control">
+            <option value="Bank Muscat">Bank Muscat</option>
+            <option value="National Bank of Oman">National Bank of Oman</option>
+            <option value="Bank Dhofar">Bank Dhofar</option>
+            <option value="Oman Arab Bank">Oman Arab Bank</option>
+            <option value="Sohar International">Sohar International</option>
+            <option value="Ahli Bank Oman">Ahli Bank Oman</option>
+            <option value="Bank Nizwa">Bank Nizwa</option>
+            <option value="Alizz Islamic Bank">Alizz Islamic Bank</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Bank Code *</label>
+          <input type="text" id="txp-rule-bankcode" class="form-control" value="BANK_MUSCAT">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Status</label>
+          <select id="txp-rule-active" class="form-control">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Rule Name *</label>
+          <input type="text" id="txp-rule-name" class="form-control" placeholder="e.g. BM Mobile Payment Sent">
+        </div>
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Sender IDs (comma-separated)</label>
+          <input type="text" id="txp-rule-senders" class="form-control" placeholder="BankMuscat, BM-ALERT">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Transaction Type *</label>
+          <select id="txp-rule-txtype" class="form-control">
+            <option value="TRANSFER_SENT">TRANSFER_SENT (Money Sent)</option>
+            <option value="TRANSFER_RECEIVED">TRANSFER_RECEIVED (Money Received)</option>
+            <option value="CARD_PAYMENT">CARD_PAYMENT (POS / Merchant Purchase)</option>
+            <option value="CASH_WITHDRAWAL">CASH_WITHDRAWAL (ATM Withdrawal)</option>
+            <option value="INTERNAL_TRANSFER">INTERNAL_TRANSFER (Own Account Transfer)</option>
+            <option value="ACCOUNT_CREDIT">ACCOUNT_CREDIT (Salary / Deposit)</option>
+            <option value="ACCOUNT_DEBIT">ACCOUNT_DEBIT (Direct Debit)</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Direction *</label>
+          <select id="txp-rule-direction" class="form-control">
+            <option value="DEBIT">DEBIT (Outgoing)</option>
+            <option value="CREDIT">CREDIT (Incoming)</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Priority</label>
+          <input type="number" id="txp-rule-priority" class="form-control" value="10" min="1" max="999">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Base Confidence (%)</label>
+          <input type="number" id="txp-rule-confidence" class="form-control" value="95" min="1" max="100">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">User-Friendly Description Template * <span style="color:var(--text-dim);font-weight:400;">(Placeholders: <code>{Counterparty}</code>, <code>{Account}</code>)</span></label>
+          <input type="text" id="txp-rule-template" class="form-control" placeholder="Money sent to {Counterparty}">
+        </div>
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Fallback Description (when name is absent)</label>
+          <input type="text" id="txp-rule-fallback" class="form-control" placeholder="Mobile payment sent">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Regex Extraction Pattern * <span style="color:var(--text-dim);font-weight:400;">(Named groups: <code>(?&lt;currency&gt;)</code>, <code>(?&lt;amount&gt;)</code>, <code>(?&lt;counterparty&gt;)</code>, <code>(?&lt;account&gt;)</code>, <code>(?&lt;date&gt;)</code>, <code>(?&lt;reference&gt;)</code>)</span></label>
+        <textarea id="txp-rule-pattern" class="form-control" rows="3" style="font-family:monospace;font-size:12px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sample Bank SMS Message</label>
+        <textarea id="txp-rule-sample" class="form-control" rows="2" style="font-family:monospace;font-size:12px;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="txp-rule-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="txp-rule-modal-save"><i data-lucide="save"></i> Save Extraction Rule</button>
+    </div>
+  </div>
+</div>
+
+<div id="txp-review-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <h2 class="modal-title">Review &amp; Approve Parsed Transaction</h2>
+      <button class="modal-close" id="txp-review-modal-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="txp-review-id">
+      <div class="form-group">
+        <label class="form-label">Original Bank Message (Preserved for Troubleshooting)</label>
+        <div id="txp-review-original" style="font-family:monospace;font-size:12px;background:rgba(255,255,255,0.04);padding:12px;border-radius:8px;color:var(--text-muted);line-height:1.45;word-break:break-word;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Clean User-Friendly Description *</label>
+        <input type="text" id="txp-review-description" class="form-control" placeholder="e.g. Money sent to Ali">
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Sender / Recipient / Merchant Name</label>
+          <input type="text" id="txp-review-counterparty" class="form-control">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Transaction Type</label>
+          <select id="txp-review-txtype" class="form-control">
+            <option value="TRANSFER_SENT">TRANSFER_SENT</option>
+            <option value="TRANSFER_RECEIVED">TRANSFER_RECEIVED</option>
+            <option value="CARD_PAYMENT">CARD_PAYMENT</option>
+            <option value="CASH_WITHDRAWAL">CASH_WITHDRAWAL</option>
+            <option value="INTERNAL_TRANSFER">INTERNAL_TRANSFER</option>
+            <option value="ACCOUNT_CREDIT">ACCOUNT_CREDIT</option>
+            <option value="ACCOUNT_DEBIT">ACCOUNT_DEBIT</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Direction</label>
+          <select id="txp-review-direction" class="form-control">
+            <option value="DEBIT">DEBIT</option>
+            <option value="CREDIT">CREDIT</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reviewer Notes</label>
+        <input type="text" id="txp-review-notes" class="form-control" placeholder="Optional note">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="txp-review-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="txp-review-modal-save"><i data-lucide="check"></i> Approve &amp; Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
 
 <!-- CONFIRM DIALOG                                               -->
 <!-- ============================================================ -->
@@ -1269,7 +1571,8 @@
 <!-- ============================================================ -->
 <div id="toast-container" class="toast-container"></div>
 
-<script src="app.js?v=20261019a"></script>
+<script src="app.js?v=20261108a"></script>
 <script src="sms-config.js?v=20261019a"></script>
+<script src="tx-parser.js?v=20261108a"></script>
 </body>
 </html>

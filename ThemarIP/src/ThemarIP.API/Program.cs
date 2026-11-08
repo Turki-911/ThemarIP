@@ -76,6 +76,7 @@ builder.Services.AddScoped<IStatementExtractionService, StatementExtractionServi
 builder.Services.AddScoped<IBankNotificationParserService, BankNotificationParserService>();
 builder.Services.AddScoped<IMailboxPullerService, MailboxPullerService>();
 builder.Services.AddScoped<ThemarIP.Application.DTOs.Sms.ISmsProcessingService, ThemarIP.Infrastructure.Services.Sms.SmsProcessingService>();
+builder.Services.AddScoped<ThemarIP.Application.Common.Interfaces.IBankTransactionMessageParserService, ThemarIP.Infrastructure.Services.Sms.BankTransactionMessageParserService>();
 
 // 4b. Add NBO API Service
 builder.Services.AddHttpClient("NboApi", client =>
@@ -194,6 +195,8 @@ using (var scope = app.Services.CreateScope())
         var dbContext = services.GetRequiredService<ApplicationDbContext>();
         var passwordHasher = services.GetRequiredService<IPasswordHasher>();
         await DbInitializer.SeedAsync(dbContext, passwordHasher);
+        var messageParser = services.GetRequiredService<ThemarIP.Application.Common.Interfaces.IBankTransactionMessageParserService>();
+        await messageParser.BackfillExistingTransactionsAsync();
     }
     catch (Exception ex)
     {
@@ -243,6 +246,8 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapGet("/admin", () => Results.Redirect("/admin/index.html"));
+app.MapGet("/admin/", () => Results.Redirect("/admin/index.html"));
 app.MapControllers();
 app.MapFallbackToFile("index.html");
 
@@ -253,7 +258,7 @@ app.MapGet("/api/health", async (ApplicationDbContext db) =>
     {
         var canConnect = await db.Database.CanConnectAsync();
         var catCount = await db.PfmCategories.CountAsync();
-        var txCount = await db.Transactions.CountAsync();
+        var txCount = await db.PfmTransactions.CountAsync();
         return Results.Ok(new
         {
             status = "Healthy",

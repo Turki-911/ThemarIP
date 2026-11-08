@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
+import '../services/bank_setup_service.dart';
 import '../services/auth_service.dart';
 import '../services/language_service.dart';
 
@@ -76,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      Navigator.of(context).pushReplacementNamed('/categories');
+      await BankSetupService.routeAfterAuth(context);
     } catch (e) {
       String msg = 'Invalid email or password. Please check your credentials.';
       if (e is DioException) {
@@ -119,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
           return AlertDialog(
-            backgroundColor: const Color(0xFF141A29),
+            backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(22),
               side: const BorderSide(color: AppTheme.neonPink, width: 1.2),
@@ -132,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Text(
                     LanguageService.tr('admin_reset_required_title'),
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppTheme.textLight,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
@@ -148,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     LanguageService.tr('admin_reset_required_sub'),
                     style: const TextStyle(
-                      color: Color(0xFF94A3B8),
+                      color: Color(0xFF475569),
                       fontSize: 13,
                       height: 1.45,
                     ),
@@ -157,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
+                      color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
@@ -168,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Text(
                             email,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppTheme.textLight,
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -360,10 +361,10 @@ class _LoginScreenState extends State<LoginScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF141A29),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        side: BorderSide(color: Color(0xFF28364F)),
+        side: BorderSide(color: Color(0xFFE2E8F0)),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
@@ -389,7 +390,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             LanguageService.tr('reset_password'),
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppTheme.textLight,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -397,7 +398,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8)),
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
                         onPressed: () => Navigator.of(ctx).pop(),
                       ),
                     ],
@@ -407,7 +408,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     isOtpSent
                         ? 'Enter the 6-digit verification code sent to your email and confirm your new password.'
                         : 'Enter your registered email address to receive a password reset verification code.',
-                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+                    style: const TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
                   ),
                   const SizedBox(height: 18),
 
@@ -464,25 +465,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00E5FF).withValues(alpha: 0.12),
+                        color: const Color(0xFF0284C7).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+                        border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.verified_outlined, color: Color(0xFF00E5FF), size: 18),
+                          const Icon(Icons.verified_outlined, color: Color(0xFF0284C7), size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Verification Code: $previewOtp (valid for 15 min)',
-                              style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 12, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Color(0xFF0284C7), fontSize: 12, fontWeight: FontWeight.bold),
                             ),
                           ),
                           TextButton(
                             onPressed: () {
                               otpCtrl.text = previewOtp!;
                             },
-                            child: const Text('Auto-fill', style: TextStyle(color: Colors.white, fontSize: 11)),
+                            child: const Text('Auto-fill', style: TextStyle(color: AppTheme.primaryPurple, fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -747,11 +748,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: AppTheme.bgCard,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: AppTheme.borderGlow),
-                  boxShadow: const [
+                  boxShadow: [
                     BoxShadow(
-                      color: Color(0x33000000),
-                      blurRadius: 30,
-                      spreadRadius: 5,
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),

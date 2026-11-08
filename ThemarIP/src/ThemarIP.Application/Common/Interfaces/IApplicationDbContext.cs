@@ -34,6 +34,8 @@ public interface IApplicationDbContext
     DbSet<ThemarIP.Domain.Entities.Sms.BankSmsRule> BankSmsRules { get; }
     DbSet<ThemarIP.Domain.Entities.Sms.BankSmsRuleVersion> BankSmsRuleVersions { get; }
     DbSet<ThemarIP.Domain.Entities.Sms.SmsProcessingLog> SmsProcessingLogs { get; }
+    DbSet<ThemarIP.Domain.Entities.Sms.BankMessageParserRule> BankMessageParserRules { get; }
+    DbSet<ThemarIP.Domain.Entities.Sms.ParsedTransactionMessage> ParsedTransactionMessages { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

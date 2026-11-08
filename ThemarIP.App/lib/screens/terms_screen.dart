@@ -27,7 +27,7 @@ class _TermsScreenState extends State<TermsScreen> {
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textLight),
                       onPressed: () {
                         Navigator.of(context).pushReplacementNamed('/onboarding');
                       },
@@ -45,7 +45,7 @@ class _TermsScreenState extends State<TermsScreen> {
                     const SizedBox(width: 12),
                     const Text(
                       'Terms & Privacy',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.textLight),
                     ),
                   ],
                 ),
@@ -59,6 +59,13 @@ class _TermsScreenState extends State<TermsScreen> {
                       color: AppTheme.bgCard,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: AppTheme.borderGlow),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: SingleChildScrollView(
                       child: Column(
@@ -69,7 +76,7 @@ class _TermsScreenState extends State<TermsScreen> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: AppTheme.textLight,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -80,29 +87,29 @@ class _TermsScreenState extends State<TermsScreen> {
                               color: AppTheme.textMuted,
                             ),
                           ),
-                          const Divider(height: 28, color: Colors.white10),
+                          const Divider(height: 28, color: Color(0xFFE2E8F0)),
 
                           // Beta Testing Phase Notice
                           Container(
                             padding: const EdgeInsets.all(14),
                             margin: const EdgeInsets.only(bottom: 20),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                              color: const Color(0xFFFEF3C7),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.45),
                               ),
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: const [
-                                Icon(Icons.info_outline_rounded, color: Color(0xFFF59E0B), size: 20),
+                                Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 20),
                                 SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
                                     'Active Beta Testing Phase: ThemarIP is undergoing active continuous updates. Occasional bugs, temporary glitches, or crashes may occur. The platform is continuously updated with enhancements.',
                                     style: TextStyle(
-                                      color: Color(0xFFFDE68A),
+                                      color: Color(0xFF92400E),
                                       fontSize: 12.5,
                                       height: 1.45,
                                       fontWeight: FontWeight.w500,
@@ -154,13 +161,13 @@ class _TermsScreenState extends State<TermsScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: _agreed
-                          ? AppTheme.primaryPurple.withValues(alpha: 0.15)
-                          : Colors.transparent,
+                          ? AppTheme.primaryPurple.withValues(alpha: 0.10)
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _agreed
                             ? AppTheme.primaryPurple
-                            : Colors.white24,
+                            : const Color(0xFFCBD5E1),
                       ),
                     ),
                     child: Row(
@@ -178,7 +185,7 @@ class _TermsScreenState extends State<TermsScreen> {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white,
+                              color: AppTheme.textLight,
                             ),
                           ),
                         ),
@@ -200,7 +207,7 @@ class _TermsScreenState extends State<TermsScreen> {
                         : null,
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.zero,
-                      disabledBackgroundColor: Colors.white12,
+                      disabledBackgroundColor: const Color(0xFFE2E8F0),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),

@@ -23,6 +23,11 @@ public static class BankCatalog
         new("AHLI_BANK",     "Ahli Bank Oman",        new[] { "ahli bank oman", "ahli bank", "ahli" }),
         new("BANK_NIZWA",    "Bank Nizwa",            new[] { "bank nizwa", "nizwa" }),
         new("ALIZZ_ISLAMIC", "Alizz Islamic Bank",    new[] { "alizz islamic bank", "alizz" }),
+        new("AMWAL_PAY",     "AmwalPay",              new[] { "amwalpay", "amwal pay", "amwal" }),
+        new("OMPAY",         "OMPay",                 new[] { "ompay", "om pay" }),
+        new("THAWANI",       "Thawani",               new[] { "thawani", "thawani technologies", "thawani pay" }),
+        new("WALITII",       "Walitii",               new[] { "walitii", "waliti" }),
+        new("PAYMOB",        "Paymob",                new[] { "paymob", "pay mob" }),
     };
 
     /// <summary>Resolves a bank from a code and/or name. Returns null when it is not a known bank.</summary>

@@ -270,27 +270,55 @@ public class BankNotificationParserService : IBankNotificationParserService
         var activeMerchants = await _context.PfmMerchants
             .Include(m => m.Aliases)
             .Include(m => m.DefaultCategory)
-            .Include(m => m.DefaultSubcategory)
             .Where(m => m.IsActive)
             .ToListAsync();
 
-        var textToMatch = result.Narration;
+        var allCategories = await _context.PfmCategories.ToListAsync();
+        var catDict = allCategories.ToDictionary(c => c.Id, c => c);
+
+        var textToMatch = result.Narration ?? string.Empty;
+        ThemarIP.Domain.Entities.Pfm.PfmMerchant? bestMerchant = null;
+        int bestLen = 0;
 
         foreach (var m in activeMerchants)
         {
-            if ((!string.IsNullOrWhiteSpace(m.Name) && textToMatch.Contains(m.Name, StringComparison.OrdinalIgnoreCase)) ||
-                m.Aliases.Any(a => !string.IsNullOrWhiteSpace(a.AliasText) && textToMatch.Contains(a.AliasText, StringComparison.OrdinalIgnoreCase)))
+            int maxLen = 0;
+            if (!string.IsNullOrWhiteSpace(m.Name) && textToMatch.Contains(m.Name.Trim(), StringComparison.OrdinalIgnoreCase))
             {
-                result.MatchedMerchant = m.Name;
-                result.MatchedMerchantId = m.Id;
-                result.Category = m.DefaultCategory?.Name ?? "Shopping";
-                result.Subcategory = m.DefaultSubcategory?.Name ?? m.Name;
-                return;
+                maxLen = m.Name.Trim().Length;
+            }
+            foreach (var a in m.Aliases)
+            {
+                if (!string.IsNullOrWhiteSpace(a.AliasText) && a.AliasText.Trim().Length > maxLen && textToMatch.Contains(a.AliasText.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    maxLen = a.AliasText.Trim().Length;
+                }
+            }
+            if (maxLen > 0 && (bestMerchant == null || maxLen > bestLen || (maxLen == bestLen && m.DefaultConfidence > bestMerchant.DefaultConfidence)))
+            {
+                bestMerchant = m;
+                bestLen = maxLen;
             }
         }
 
+        if (bestMerchant != null)
+        {
+            result.MatchedMerchant = bestMerchant.Name;
+            result.MatchedMerchantId = bestMerchant.Id;
+            result.Category = bestMerchant.DefaultCategory?.Name ?? "Shopping";
+            if (bestMerchant.DefaultSubcategoryId.HasValue && catDict.TryGetValue(bestMerchant.DefaultSubcategoryId.Value, out var subCat))
+            {
+                result.Subcategory = subCat.Name;
+            }
+            else
+            {
+                result.Subcategory = bestMerchant.Name;
+            }
+            return;
+        }
+
         // Fallback: Check Active Category Rules
-        var rules = await _context.CategoryRules.Where(r => r.IsActive).ToListAsync();
+        var rules = await _context.CategoryRules.Where(r => r.IsActive).OrderByDescending(r => r.Priority).ToListAsync();
         foreach (var r in rules)
         {
             if (!string.IsNullOrEmpty(r.Keyword) && textToMatch.Contains(r.Keyword, StringComparison.OrdinalIgnoreCase))
@@ -301,7 +329,7 @@ public class BankNotificationParserService : IBankNotificationParserService
             }
         }
 
-        result.Category = result.Direction == "CREDIT" ? "Income" : "General";
+        result.Category = result.Direction == "CREDIT" ? "Income" : "Other";
     }
 
     private async Task ValidateAndDeduplicateAsync(ParsedNotificationResultDto result, Guid? userId)

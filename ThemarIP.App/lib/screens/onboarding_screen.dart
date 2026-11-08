@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/api_config.dart';
 import '../config/app_theme.dart';
 import '../services/auth_service.dart';
+import '../services/bank_setup_service.dart';
 import '../services/language_service.dart';
 import '../services/sms_service.dart';
 
@@ -41,7 +42,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final token = await AuthService.getToken();
     if (!mounted) return;
     if (token != null && token.isNotEmpty) {
-      Navigator.of(context).pushReplacementNamed('/categories');
+      await BankSetupService.routeAfterAuth(context);
     } else if (goToRegister) {
       Navigator.of(context).pushReplacementNamed('/terms');
     } else {
@@ -75,7 +76,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       valueListenable: LanguageService.notifier,
       builder: (context, lang, _) {
         return Scaffold(
-          backgroundColor: const Color(0xFF0E101C),
+          backgroundColor: const Color(0xFFF8FAFC),
           body: SafeArea(
             child: Center(
               child: Container(
@@ -92,7 +93,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             onPressed: _prevPage,
                             icon: const Icon(
                               Icons.arrow_back_ios_new_rounded,
-                              color: Colors.white,
+                              color: Color(0xFF0F172A),
                               size: 20,
                             ),
                             tooltip: LanguageService.tr('back'),
@@ -124,7 +125,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   children: [
                                     TextSpan(
                                       text: 'Themar',
-                                      style: TextStyle(color: Colors.white),
+                                      style: TextStyle(color: Color(0xFF0F172A)),
                                     ),
                                     TextSpan(
                                       text: 'IP',
@@ -148,7 +149,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               child: Text(
                                 LanguageService.tr('skip'),
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: Color(0xFF475569),
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -187,7 +188,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           decoration: BoxDecoration(
                             color: _currentPage == index
                                 ? const Color(0xFF4F6EF7)
-                                : Colors.white24,
+                                : const Color(0xFFCBD5E1),
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),
@@ -337,7 +338,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
-                color: Colors.white,
+                color: Color(0xFF0F172A),
                 height: 1.22,
                 letterSpacing: -0.5,
               ),
@@ -353,7 +354,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 15.5,
-                color: Color(0xFFB4BCD0),
+                color: Color(0xFF475569),
                 height: 1.5,
               ),
             ),
@@ -373,15 +374,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1D2032),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.07),
+          color: const Color(0xFFE2E8F0),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -399,7 +400,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -407,7 +408,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   subtitle,
                   style: const TextStyle(
                     fontSize: 14,
-                    color: Color(0xFFB4BCD0),
+                    color: Color(0xFF64748B),
                     height: 1.35,
                   ),
                 ),
@@ -432,12 +433,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       color: badge.bgColor,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: const Color(0xFF1D2032),
+                        color: Colors.white,
                         width: 2.5,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.25),
+                          color: Colors.black.withValues(alpha: 0.12),
                           blurRadius: 6,
                         ),
                       ],
@@ -480,7 +481,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: const TextStyle(
                 fontSize: 27,
                 fontWeight: FontWeight.w800,
-                color: Colors.white,
+                color: Color(0xFF0F172A),
                 height: 1.22,
                 letterSpacing: -0.5,
               ),
@@ -494,7 +495,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               const Icon(
                 Icons.verified_user_outlined,
-                color: Color(0xFF94A3B8),
+                color: Color(0xFF475569),
                 size: 16,
               ),
               const SizedBox(width: 6),
@@ -504,7 +505,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 13.5,
-                    color: Color(0xFF94A3B8),
+                    color: Color(0xFF475569),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -513,47 +514,54 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 22),
 
-          // Dark rounded feature container with 4 items
+          // Rounded feature container with 4 items
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
             decoration: BoxDecoration(
-              color: const Color(0xFF191C2B),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.06),
+                color: const Color(0xFFE2E8F0),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
             child: Column(
               children: [
                 _buildFeatureRow(
                   iconData: Icons.block_rounded,
                   iconColor: const Color(0xFFF43F5E),
-                  iconBg: const Color(0xFF3A1D2E),
+                  iconBg: const Color(0xFFFFE4E6),
                   title: LanguageService.tr('slide2_item1_title'),
                   subtitle: LanguageService.tr('slide2_item1_sub'),
                 ),
                 const SizedBox(height: 22),
                 _buildFeatureRow(
                   iconData: Icons.insights_rounded,
-                  iconColor: const Color(0xFFA855F7),
-                  iconBg: const Color(0xFF2B1E3E),
+                  iconColor: const Color(0xFF7C3AED),
+                  iconBg: const Color(0xFFEDE9FE),
                   title: LanguageService.tr('slide2_item2_title'),
                   subtitle: LanguageService.tr('slide2_item2_sub'),
                 ),
                 const SizedBox(height: 22),
                 _buildFeatureRow(
                   iconData: Icons.savings_outlined,
-                  iconColor: const Color(0xFF2DD4BF),
-                  iconBg: const Color(0xFF153238),
+                  iconColor: const Color(0xFF0D9488),
+                  iconBg: const Color(0xFFCCFBF1),
                   title: LanguageService.tr('slide2_item3_title'),
                   subtitle: LanguageService.tr('slide2_item3_sub'),
                 ),
                 const SizedBox(height: 22),
                 _buildFeatureRow(
                   iconData: Icons.account_balance_rounded,
-                  iconColor: const Color(0xFFFBBF24),
-                  iconBg: const Color(0xFF382C1E),
+                  iconColor: const Color(0xFFD97706),
+                  iconBg: const Color(0xFFFEF3C7),
                   title: LanguageService.tr('slide2_item4_title'),
                   subtitle: LanguageService.tr('slide2_item4_sub'),
                 ),
@@ -602,7 +610,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 style: const TextStyle(
                   fontSize: 16.5,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: Color(0xFF0F172A),
                   height: 1.25,
                 ),
               ),
@@ -611,7 +619,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 subtitle,
                 style: const TextStyle(
                   fontSize: 13.8,
-                  color: Color(0xFF94A3B8),
+                  color: Color(0xFF64748B),
                   height: 1.4,
                 ),
               ),

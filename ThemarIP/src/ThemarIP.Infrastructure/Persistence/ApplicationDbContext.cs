@@ -46,6 +46,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<ThemarIP.Domain.Entities.Sms.BankSmsRule> BankSmsRules => Set<ThemarIP.Domain.Entities.Sms.BankSmsRule>();
     public DbSet<ThemarIP.Domain.Entities.Sms.BankSmsRuleVersion> BankSmsRuleVersions => Set<ThemarIP.Domain.Entities.Sms.BankSmsRuleVersion>();
     public DbSet<ThemarIP.Domain.Entities.Sms.SmsProcessingLog> SmsProcessingLogs => Set<ThemarIP.Domain.Entities.Sms.SmsProcessingLog>();
+    public DbSet<ThemarIP.Domain.Entities.Sms.BankMessageParserRule> BankMessageParserRules => Set<ThemarIP.Domain.Entities.Sms.BankMessageParserRule>();
+    public DbSet<ThemarIP.Domain.Entities.Sms.ParsedTransactionMessage> ParsedTransactionMessages => Set<ThemarIP.Domain.Entities.Sms.ParsedTransactionMessage>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -173,6 +175,30 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasIndex(e => e.Keyword);
             entity.Property(e => e.Keyword).IsRequired().HasMaxLength(128);
             entity.Property(e => e.Category).IsRequired().HasMaxLength(128);
+        });
+
+        // BankMessageParserRule Configuration
+        modelBuilder.Entity<ThemarIP.Domain.Entities.Sms.BankMessageParserRule>(entity =>
+        {
+            entity.ToTable("BankMessageParserRules");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.BankCode);
+            entity.Property(e => e.BankCode).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.BankName).IsRequired().HasMaxLength(128);
+            entity.Property(e => e.RuleName).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.TransactionType).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Direction).IsRequired().HasMaxLength(16);
+        });
+
+        // ParsedTransactionMessage Configuration
+        modelBuilder.Entity<ThemarIP.Domain.Entities.Sms.ParsedTransactionMessage>(entity =>
+        {
+            entity.ToTable("ParsedTransactionMessages");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.TransactionId);
+            entity.HasIndex(e => e.DeduplicationKey);
+            entity.Property(e => e.Amount).HasPrecision(18, 3);
+            entity.Property(e => e.BalanceAfter).HasPrecision(18, 3);
         });
     }
 }

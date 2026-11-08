@@ -67,6 +67,13 @@ public class StatementExtractionService : IStatementExtractionService
             }
         }
 
+        if (result.Transactions != null && result.Transactions.Count > 1)
+        {
+            result.Transactions = result.Transactions
+                .OrderByDescending(t => t.PostDate)
+                .ToList();
+        }
+
         return result;
     }
 
@@ -133,13 +140,27 @@ public class StatementExtractionService : IStatementExtractionService
                            (tx.Credit.HasValue && !tx.Debit.HasValue);
 
             Guid? matchedMerchantId = null;
+            int bestLen = 0;
+            int bestConf = 0;
             foreach (var m in activeMerchants)
             {
-                if ((!string.IsNullOrWhiteSpace(m.Name) && txNarration.Contains(m.Name, StringComparison.OrdinalIgnoreCase)) ||
-                    m.Aliases.Any(a => !string.IsNullOrWhiteSpace(a.AliasText) && txNarration.Contains(a.AliasText, StringComparison.OrdinalIgnoreCase)))
+                int maxLen = 0;
+                if (!string.IsNullOrWhiteSpace(m.Name) && txNarration.Contains(m.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    maxLen = m.Name.Trim().Length;
+                }
+                foreach (var a in m.Aliases)
+                {
+                    if (!string.IsNullOrWhiteSpace(a.AliasText) && a.AliasText.Trim().Length > maxLen && txNarration.Contains(a.AliasText.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        maxLen = a.AliasText.Trim().Length;
+                    }
+                }
+                if (maxLen > 0 && (maxLen > bestLen || (maxLen == bestLen && m.DefaultConfidence > bestConf)))
                 {
                     matchedMerchantId = m.Id;
-                    break;
+                    bestLen = maxLen;
+                    bestConf = m.DefaultConfidence;
                 }
             }
 

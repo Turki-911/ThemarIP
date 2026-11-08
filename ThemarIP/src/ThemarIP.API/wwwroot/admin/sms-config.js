@@ -19,6 +19,12 @@ const SmsConfig = {
     'ahli bank': 'AHLI_BANK',
     'bank nizwa': 'BANK_NIZWA',
     'alizz islamic bank': 'ALIZZ_ISLAMIC',
+    'amwalpay': 'AMWAL_PAY',
+    'amwal pay': 'AMWAL_PAY',
+    'ompay': 'OMPAY',
+    'thawani': 'THAWANI',
+    'walitii': 'WALITII',
+    'paymob': 'PAYMOB',
   },
 
   // ── helpers ────────────────────────────────────────────────

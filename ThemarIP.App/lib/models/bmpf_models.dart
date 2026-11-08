@@ -26,6 +26,7 @@ class BmpfHeader {
 
 class BmpfTransaction {
   final String narration;
+  final String? originalMessage;
   final double amount;
   final String direction; // DEBIT or CREDIT
   final String currency;
@@ -37,6 +38,10 @@ class BmpfTransaction {
   final String category;
   final String? subcategory;
   final String? matchedMerchant;
+  final String? counterpartyName;
+  final String? accountNumberMasked;
+  final String? transactionReference;
+  final String? transactionTypeCode;
   final int confidence;
   final String? validationMessage;
   final String? extractionStatus;
@@ -45,6 +50,7 @@ class BmpfTransaction {
 
   BmpfTransaction({
     required this.narration,
+    this.originalMessage,
     required this.amount,
     required this.direction,
     this.currency = 'OMR',
@@ -56,6 +62,10 @@ class BmpfTransaction {
     this.category = 'General',
     this.subcategory,
     this.matchedMerchant,
+    this.counterpartyName,
+    this.accountNumberMasked,
+    this.transactionReference,
+    this.transactionTypeCode,
     this.confidence = 100,
     this.validationMessage,
     this.extractionStatus,
@@ -69,9 +79,12 @@ class BmpfTransaction {
     final isCredit = credit != null && credit > 0;
     final amt = (json['amount'] as num?)?.toDouble() ?? (isCredit ? credit : (debit ?? 0.0));
     final dir = (json['direction']?.toString() ?? (isCredit ? 'CREDIT' : 'DEBIT')).toUpperCase();
+    final rawNarr = json['originalMessage']?.toString() ?? json['narration']?.toString() ?? json['description']?.toString();
+    final cleanNarr = json['generatedDescription']?.toString() ?? json['narration']?.toString() ?? json['description']?.toString() ?? 'Transaction';
 
     return BmpfTransaction(
-      narration: json['narration']?.toString() ?? json['description']?.toString() ?? 'Transaction',
+      narration: cleanNarr,
+      originalMessage: rawNarr,
       amount: amt,
       direction: dir,
       currency: json['currency']?.toString() ?? 'OMR',
@@ -83,7 +96,11 @@ class BmpfTransaction {
       category: json['category']?.toString() ?? 'General',
       subcategory: json['subcategory']?.toString(),
       matchedMerchant: json['matchedMerchant']?.toString(),
-      confidence: (json['confidence'] as num?)?.toInt() ?? 100,
+      counterpartyName: json['counterpartyName']?.toString(),
+      accountNumberMasked: json['accountNumberMasked']?.toString(),
+      transactionReference: json['transactionReference']?.toString(),
+      transactionTypeCode: json['transactionTypeCode']?.toString(),
+      confidence: (json['confidenceScore'] as num?)?.toInt() ?? (json['confidence'] as num?)?.toInt() ?? 100,
       validationMessage: json['validationMessage']?.toString(),
       extractionStatus: json['extractionStatus']?.toString(),
       bankCode: json['bankCode']?.toString() ?? 'BANK_MUSCAT',
@@ -93,7 +110,9 @@ class BmpfTransaction {
 
   Map<String, dynamic> toJson() {
     return {
-      'narration': narration,
+      'narration': originalMessage ?? narration,
+      'generatedDescription': narration,
+      'originalMessage': originalMessage ?? narration,
       'amount': amount,
       'direction': direction,
       'currency': currency,
@@ -107,6 +126,10 @@ class BmpfTransaction {
       'category': category,
       'subcategory': subcategory,
       'matchedMerchant': matchedMerchant,
+      'counterpartyName': counterpartyName,
+      'accountNumberMasked': accountNumberMasked,
+      'transactionReference': transactionReference,
+      'transactionTypeCode': transactionTypeCode,
       'confidence': confidence,
       'validationMessage': validationMessage,
       'extractionStatus': extractionStatus,
@@ -135,11 +158,40 @@ class BmpfParseResult {
     required this.rawJson,
   });
 
+  static DateTime? _parseDate(String? dateStr) {
+    if (dateStr == null || dateStr.trim().isEmpty) return null;
+    final parsed = DateTime.tryParse(dateStr.trim());
+    if (parsed != null) return parsed;
+    final parts = dateStr.trim().split(RegExp(r'[/.-]'));
+    if (parts.length >= 3) {
+      try {
+        final p0 = int.parse(parts[0]);
+        final p1 = int.parse(parts[1]);
+        final p2 = int.parse(parts[2].split(' ').first);
+        if (p0 > 1900) {
+          return DateTime(p0, p1, p2);
+        } else {
+          final yearFull = p2 < 100 ? (2000 + p2) : p2;
+          return DateTime(yearFull, p1, p0);
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
   factory BmpfParseResult.fromJson(Map<String, dynamic> json) {
     final headerObj = json['header'] is Map ? json['header'] as Map<String, dynamic> : <String, dynamic>{};
     final txList = (json['transactions'] as List? ?? [])
         .map((e) => BmpfTransaction.fromJson(e as Map<String, dynamic>))
-        .toList();
+        .toList()
+      ..sort((a, b) {
+        final dtA = _parseDate(a.postDate ?? a.valueDate);
+        final dtB = _parseDate(b.postDate ?? b.valueDate);
+        if (dtA == null && dtB == null) return 0;
+        if (dtA == null) return 1;
+        if (dtB == null) return -1;
+        return dtB.compareTo(dtA);
+      });
 
     final bCode = json['bankCode']?.toString() ?? headerObj['bankCode']?.toString() ?? 'BANK_MUSCAT';
     final bName = json['bankName']?.toString() ?? headerObj['bankName']?.toString() ?? 'Bank Muscat';

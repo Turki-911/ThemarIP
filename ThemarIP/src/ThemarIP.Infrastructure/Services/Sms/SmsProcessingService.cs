@@ -22,12 +22,18 @@ public class SmsProcessingService : ISmsProcessingService
 
     private readonly IApplicationDbContext _db;
     private readonly IBankNotificationParserService _notifications;
+    private readonly IBankTransactionMessageParserService _messageParser;
     private readonly ILogger<SmsProcessingService> _log;
 
-    public SmsProcessingService(IApplicationDbContext db, IBankNotificationParserService notifications, ILogger<SmsProcessingService> log)
+    public SmsProcessingService(
+        IApplicationDbContext db,
+        IBankNotificationParserService notifications,
+        IBankTransactionMessageParserService messageParser,
+        ILogger<SmsProcessingService> log)
     {
         _db = db;
         _notifications = notifications;
+        _messageParser = messageParser;
         _log = log;
     }
 
@@ -253,6 +259,29 @@ public class SmsProcessingService : ISmsProcessingService
             }
             await _db.SaveChangesAsync();
 
+            try
+            {
+                var parsedMsg = await _messageParser.ParseAndStoreAsync(new ParseBankMessageRequestDto
+                {
+                    BankCode = bank.Code,
+                    Sender = sender,
+                    RawMessage = message,
+                    FallbackAmount = ex.Amount,
+                    FallbackCurrency = ex.Currency,
+                    FallbackDirection = ex.Type,
+                    FallbackDate = ex.Date ?? received
+                }, userId, txId, entry.Id);
+
+                if (!string.IsNullOrWhiteSpace(parsedMsg.GeneratedDescription))
+                {
+                    ex.Narration = parsedMsg.GeneratedDescription;
+                }
+            }
+            catch (Exception parseEx)
+            {
+                _log.LogWarning(parseEx, "Could not store ParsedTransactionMessage for SMS {TxId}", txId);
+            }
+
             entry.TransactionId = txId;
             return await Finish(entry, "Saved", "Transaction saved.", ex, txId);
         }
@@ -331,7 +360,12 @@ public class SmsProcessingService : ISmsProcessingService
             "OAB", "Oman Arab Bank", "OmanArabBank",
             "SoharInt", "Sohar International",
             "Bank Nizwa", "BankNizwa",
-            "Alizz", "Alizz Islamic", "Meethaq"
+            "Alizz", "Alizz Islamic", "Meethaq",
+            "AmwalPay", "Amwal",
+            "OMPay",
+            "Thawani", "ThawaniPay",
+            "Walitii", "Waliti",
+            "Paymob"
         };
         return rules.Select(r => r.SenderIds)
             .SelectMany(SplitSenders)

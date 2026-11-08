@@ -217,9 +217,9 @@ class LanguageSelectorPill extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
+            color: const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFF28364F)),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -269,7 +269,7 @@ class LanguageSelectorPill extends StatelessWidget {
           style: TextStyle(
             fontSize: compact ? 11.5 : 12.5,
             fontWeight: FontWeight.w700,
-            color: selected ? Colors.white : const Color(0xFF94A3B8),
+            color: selected ? Colors.white : const Color(0xFF475569),
           ),
         ),
       ),

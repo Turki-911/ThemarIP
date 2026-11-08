@@ -2,7 +2,9 @@
    BMPF — Bank Muscat PFM Extractor (App Logic)
    ============================================================ */
 
-const API_BASE = 'http://localhost:5267/api/statements';
+const API_BASE = (typeof window !== 'undefined' && window.location && window.location.hostname && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1'))
+  ? `${window.location.origin}/api/statements`
+  : 'http://localhost:5267/api/statements';
 let selectedFile = null;
 let currentParseResult = null;
 let dbCategoryHierarchy = [];

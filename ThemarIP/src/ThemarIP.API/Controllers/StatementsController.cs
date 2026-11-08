@@ -79,6 +79,7 @@ public class StatementsController : ControllerBase
             query = query.Where(t => t.UserId == userId.Value);
         }
         var txns = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(query);
+        txns = txns.OrderByDescending(t => t.TransactionDate).ThenByDescending(t => t.CreatedAt).ToList();
         return Ok(txns);
     }
 
@@ -335,6 +336,80 @@ public class StatementsController : ControllerBase
             selectedBanks = existingBanks,
             enabledSmsRules = enabledRules,
             trustScore = user.TrustScore
+        });
+    }
+
+    [HttpPost("user-bank-unsync")]
+    public async Task<IActionResult> UnsyncUserBank(
+        [FromBody] UserBankSelectionDto dto,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+    {
+        if (dto == null) return BadRequest(new { message = "Invalid request payload." });
+
+        ThemarIP.Domain.Entities.User? user = null;
+        if (dto.UserId.HasValue && dto.UserId.Value != System.Guid.Empty)
+        {
+            user = await context.Users.FindAsync(dto.UserId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(dto.Email))
+        {
+            user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                context.Users, u => u.Email.ToLower() == dto.Email.ToLower());
+        }
+
+        if (user == null)
+        {
+            var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                           ?? User?.FindFirst("sub")?.Value;
+            if (!string.IsNullOrEmpty(userIdClaim) && System.Guid.TryParse(userIdClaim, out var claimGuid))
+            {
+                user = await context.Users.FindAsync(claimGuid);
+            }
+        }
+
+        if (user == null)
+        {
+            return NotFound(new { message = "User not found to unsync bank." });
+        }
+
+        var canonicalTarget = ThemarIP.Application.Common.BankCatalog.Canonical(dto.BankCode, dto.BankName);
+
+        // Remove canonical bank from user.AccountNumber CSV
+        var remainingBanks = ThemarIP.Application.Common.BankCatalog.ParseSelection(user.AccountNumber)
+            .Where(b => !string.Equals(b.Code, canonicalTarget.Code, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(b.Name, canonicalTarget.Name, StringComparison.OrdinalIgnoreCase))
+            .Select(b => b.Name)
+            .ToList();
+
+        user.AccountNumber = remainingBanks.Count > 0 ? string.Join(", ", remainingBanks) : null;
+
+        // Also remove any PfmTransactions belonging to this user for the unsynced bank
+        var userTxs = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            context.PfmTransactions.Where(t => t.UserId == user.Id));
+        var txsToRemove = userTxs
+            .Where(t => string.Equals(
+                ThemarIP.Application.Common.BankCatalog.Canonical(t.BankCode, t.BankName).Code,
+                canonicalTarget.Code,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (txsToRemove.Count > 0)
+        {
+            context.PfmTransactions.RemoveRange(txsToRemove);
+        }
+
+        await context.SaveChangesAsync(default);
+
+        return Ok(new
+        {
+            success = true,
+            message = $"Unsynced {canonicalTarget.Name} and removed {txsToRemove.Count} transaction(s).",
+            userId = user.Id,
+            removedBankCode = canonicalTarget.Code,
+            removedBankName = canonicalTarget.Name,
+            removedTransactions = txsToRemove.Count,
+            selectedBank = user.AccountNumber,
+            selectedBanks = remainingBanks
         });
     }
 
@@ -877,56 +952,66 @@ public class StatementsController : ControllerBase
             )
         );
 
-        // Map to format that works seamlessly for frontend:
+        // Map to format that works seamlessly for frontend, ordered by DisplayOrder:
         // Returns id, name, icon, color, displayOrder, isEnabled, parentId,
         // and both 'children' and 'subcategories' (for backwards compatibility)
-        var result = rootCategories.Select(c => new
-        {
-            id = c.Id,
-            name = c.Name,
-            icon = c.Icon,
-            color = c.Color,
-            displayOrder = c.DisplayOrder,
-            isEnabled = c.IsEnabled,
-            parentId = c.ParentId,
-            children = c.Children.Select(sub => new
+        var result = rootCategories
+            .OrderBy(c => c.DisplayOrder)
+            .ThenBy(c => c.Name)
+            .Select(c => new
             {
-                id = sub.Id,
-                categoryId = c.Id,
-                parentId = sub.ParentId,
-                name = sub.Name,
-                icon = sub.Icon,
-                color = sub.Color,
-                displayOrder = sub.DisplayOrder,
-                isEnabled = sub.IsEnabled
-            }).ToList(),
-            subcategories = c.Children.Select(sub => new
-            {
-                id = sub.Id,
-                categoryId = c.Id,
-                parentId = sub.ParentId,
-                name = sub.Name,
-                icon = sub.Icon,
-                color = sub.Color,
-                displayOrder = sub.DisplayOrder,
-                isEnabled = sub.IsEnabled
-            }).ToList()
-        }).ToList();
+                id = c.Id,
+                name = c.Name,
+                icon = c.Icon,
+                color = c.Color,
+                displayOrder = c.DisplayOrder,
+                isEnabled = c.IsEnabled,
+                parentId = c.ParentId,
+                children = c.Children
+                    .OrderBy(sub => sub.DisplayOrder)
+                    .ThenBy(sub => sub.Name)
+                    .Select(sub => new
+                    {
+                        id = sub.Id,
+                        categoryId = c.Id,
+                        parentId = sub.ParentId,
+                        name = sub.Name,
+                        icon = sub.Icon,
+                        color = sub.Color,
+                        displayOrder = sub.DisplayOrder,
+                        isEnabled = sub.IsEnabled
+                    }).ToList(),
+                subcategories = c.Children
+                    .OrderBy(sub => sub.DisplayOrder)
+                    .ThenBy(sub => sub.Name)
+                    .Select(sub => new
+                    {
+                        id = sub.Id,
+                        categoryId = c.Id,
+                        parentId = sub.ParentId,
+                        name = sub.Name,
+                        icon = sub.Icon,
+                        color = sub.Color,
+                        displayOrder = sub.DisplayOrder,
+                        isEnabled = sub.IsEnabled
+                    }).ToList()
+            }).ToList();
 
         return Ok(result);
     }
 
     /// <summary>
     /// Single source of truth: counts transactions per PfmCategory name
-    /// by matching PfmTransaction.Narration against active PfmMerchants (and PfmMerchantAliases)
-    /// and active CategoryRules / PfmCategorizationRules.
-    /// Both Admin Portal and BMPF call this endpoint — single unified server-side engine.
+    /// by matching PfmTransaction.Narration against active PfmMerchants (and PfmMerchantAliases, longest match first),
+    /// active PfmCategorizationRules (with PfmRuleConditions), and active CategoryRules.
+    /// Both Admin Portal and Mobile App use this unified engine.
     /// </summary>
     [HttpGet("category-stats")]
     public async Task<IActionResult> GetCategoryStats(
         [FromQuery] System.Guid? userId,
         [FromQuery] string? bankCode,
-        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context,
+        [FromServices] ThemarIP.Application.Common.Interfaces.IBankTransactionMessageParserService messageParser)
     {
         var activeMerchants = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
             Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
@@ -938,8 +1023,16 @@ public class StatementsController : ControllerBase
             )
         );
 
-        var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.CategoryRules);
-        var activeRules = rules.Where(r => r.IsActive).OrderByDescending(r => r.Priority).ToList();
+        var pfmRules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                context.PfmCategorizationRules.Where(r => r.Status == ThemarIP.Domain.Enums.Pfm.RuleStatus.Active),
+                r => r.Conditions
+            )
+        );
+        var activePfmRules = pfmRules.OrderByDescending(r => r.Priority).ThenByDescending(r => r.Confidence).ToList();
+
+        var legacyRules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(context.CategoryRules);
+        var activeLegacyRules = legacyRules.Where(r => r.IsActive).OrderByDescending(r => r.Priority).ThenByDescending(r => (r.Keyword ?? "").Length).ToList();
 
         if (!userId.HasValue || userId.Value == System.Guid.Empty)
         {
@@ -960,13 +1053,19 @@ public class StatementsController : ControllerBase
             txQuery = txQuery.Where(t => t.BankCode == bankCode);
         }
         var transactions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(txQuery);
+        transactions = transactions.OrderByDescending(t => t.TransactionDate).ThenByDescending(t => t.CreatedAt).ToList();
 
-        var rootCategories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        var rawRootCategories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
             Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
                 context.PfmCategories.Where(c => c.ParentId == null),
                 c => c.Children
             )
         );
+        var rootCategories = rawRootCategories
+            .Where(c => c.IsEnabled)
+            .OrderBy(c => c.DisplayOrder)
+            .ThenBy(c => c.Name)
+            .ToList();
 
         var allSubcategories = rootCategories.SelectMany(c => c.Children.Select(sub => new { Sub = sub, Parent = c })).ToList();
 
@@ -981,113 +1080,219 @@ public class StatementsController : ControllerBase
         if (!counts.ContainsKey("Other")) counts["Other"] = 0;
         if (!catTxns.ContainsKey("Other")) catTxns["Other"] = new System.Collections.Generic.List<object>();
 
+        var parsedMap = await messageParser.GetParsedLookupByTransactionIdsAsync(transactions.Select(t => t.Id));
+
         foreach (var tx in transactions)
         {
             var narration = (tx.Narration ?? "").ToUpperInvariant();
+            bool isCreditTx = tx.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Credit
+                || (narration.Contains("HAS BEEN CREDITED") && !narration.Contains("IS DEBITED"))
+                || (narration.Contains("RECEIVED") && narration.Contains("FROM"))
+                || narration.Contains("MOBILE PAYMENT FROM");
+            bool isDebitPosOrOutgoing = !isCreditTx && (narration.StartsWith("POS ") || narration.Contains("IS DEBITED") || narration.Contains("MOBILE PAYMENT FOR"));
+
+            if (!parsedMap.TryGetValue(tx.Id, out var parsedMsg))
+            {
+                parsedMsg = await messageParser.ParseAndStoreAsync(new ThemarIP.Application.DTOs.Sms.ParseBankMessageRequestDto
+                {
+                    BankCode = tx.BankCode,
+                    Sender = tx.BankName,
+                    RawMessage = tx.Narration ?? string.Empty,
+                    FallbackAmount = tx.Amount,
+                    FallbackCurrency = tx.Currency,
+                    FallbackDirection = isCreditTx ? "CREDIT" : "DEBIT",
+                    FallbackDate = tx.TransactionDate
+                }, tx.UserId, tx.Id, null);
+                parsedMap[tx.Id] = parsedMsg;
+            }
+
+            string cleanDescription = !string.IsNullOrWhiteSpace(parsedMsg.GeneratedDescription)
+                ? parsedMsg.GeneratedDescription
+                : (tx.Narration ?? "Transaction");
+
+            object BuildTxItem(string matchedKw, string subCat) => new
+            {
+                id = tx.Id,
+                transactionDate = tx.TransactionDate,
+                narration = cleanDescription,
+                generatedDescription = cleanDescription,
+                originalMessage = tx.Narration,
+                amount = tx.Amount,
+                currency = tx.Currency,
+                transactionType = isCreditTx ? "Credit" : "Debit",
+                transactionTypeCode = parsedMsg.TransactionType,
+                direction = isCreditTx ? "CREDIT" : "DEBIT",
+                balanceAfter = tx.BalanceAfter ?? parsedMsg.BalanceAfter,
+                counterpartyName = parsedMsg.CounterpartyName,
+                accountNumberMasked = parsedMsg.AccountNumberMasked,
+                transactionReference = parsedMsg.TransactionReference,
+                confidenceScore = parsedMsg.ConfidenceScore,
+                reviewStatus = parsedMsg.ReviewStatus,
+                matchedKeyword = matchedKw,
+                subcategory = subCat,
+                bankCode = tx.BankCode,
+                bankName = tx.BankName
+            };
+
             bool matched = false;
 
-            // 1. Check Active Merchants & Aliases from themarip.db
+            // 1. Check Active Merchants & Aliases from themarip.db (Longest-Match-First specificity)
+            ThemarIP.Domain.Entities.Pfm.PfmMerchant? bestMerchant = null;
+            int bestMatchLen = 0;
+
             foreach (var merchant in activeMerchants)
             {
-                bool isMerchantMatch = (!string.IsNullOrWhiteSpace(merchant.Name) && narration.Contains(merchant.Name.ToUpperInvariant()))
-                    || merchant.Aliases.Any(a => !string.IsNullOrWhiteSpace(a.AliasText) && narration.Contains(a.AliasText.ToUpperInvariant()));
-
-                if (isMerchantMatch)
+                var mCatName = merchant.DefaultCategory?.Name ?? "";
+                if (isDebitPosOrOutgoing && string.Equals(mCatName, "Income", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    // Find parent category and subcategory
-                    string targetCatName = "Other";
-                    string subName = "General";
+                    continue;
+                }
 
-                    if (merchant.DefaultSubcategoryId.HasValue)
+                int maxLenForMerchant = 0;
+                if (!string.IsNullOrWhiteSpace(merchant.Name))
+                {
+                    var mNameUpper = merchant.Name.Trim().ToUpperInvariant();
+                    if (narration.Contains(mNameUpper))
                     {
-                        var foundSub = allSubcategories.FirstOrDefault(s => s.Sub.Id == merchant.DefaultSubcategoryId.Value);
-                        if (foundSub != null)
+                        maxLenForMerchant = mNameUpper.Length;
+                    }
+                }
+
+                foreach (var alias in merchant.Aliases)
+                {
+                    if (!string.IsNullOrWhiteSpace(alias.AliasText))
+                    {
+                        var aliasUpper = alias.AliasText.Trim().ToUpperInvariant();
+                        if (aliasUpper.Length > maxLenForMerchant && narration.Contains(aliasUpper))
                         {
-                            targetCatName = foundSub.Parent.Name;
-                            subName = foundSub.Sub.Name;
+                            maxLenForMerchant = aliasUpper.Length;
                         }
                     }
+                }
 
-                    if (targetCatName == "Other" && merchant.DefaultCategoryId.HasValue)
+                if (maxLenForMerchant > 0)
+                {
+                    if (bestMerchant == null ||
+                        maxLenForMerchant > bestMatchLen ||
+                        (maxLenForMerchant == bestMatchLen && merchant.DefaultConfidence > bestMerchant.DefaultConfidence))
                     {
-                        var foundCat = rootCategories.FirstOrDefault(c => c.Id == merchant.DefaultCategoryId.Value);
-                        if (foundCat != null)
-                        {
-                            targetCatName = foundCat.Name;
-                        }
+                        bestMerchant = merchant;
+                        bestMatchLen = maxLenForMerchant;
                     }
-
-                    if (targetCatName == "Other" && merchant.DefaultCategory != null)
-                    {
-                        targetCatName = merchant.DefaultCategory.Name;
-                    }
-
-                    if (counts.ContainsKey(targetCatName)) counts[targetCatName]++;
-                    else counts["Other"]++;
-
-                    bool isCreditTx = tx.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Credit
-                        || string.Equals(targetCatName, "Income", System.StringComparison.OrdinalIgnoreCase)
-                        || (narration.Contains("HAS BEEN CREDITED") && !narration.Contains("IS DEBITED"));
-
-                    var txItem = new
-                    {
-                        id = tx.Id,
-                        transactionDate = tx.TransactionDate,
-                        narration = tx.Narration,
-                        amount = tx.Amount,
-                        currency = tx.Currency,
-                        transactionType = isCreditTx ? "Credit" : tx.TransactionType.ToString(),
-                        direction = isCreditTx ? "CREDIT" : "DEBIT",
-                        balanceAfter = tx.BalanceAfter,
-                        matchedKeyword = merchant.Name,
-                        subcategory = subName,
-                        bankCode = tx.BankCode,
-                        bankName = tx.BankName
-                    };
-
-                    if (catTxns.ContainsKey(targetCatName)) catTxns[targetCatName].Add(txItem);
-                    else catTxns["Other"].Add(txItem);
-
-                    matched = true;
-                    break;
                 }
             }
 
-            // 2. Check Active Categorization Rules
+            if (bestMerchant != null)
+            {
+                string targetCatName = "Other";
+                string subName = "Uncategorized";
+
+                if (bestMerchant.DefaultSubcategoryId.HasValue)
+                {
+                    var foundSub = allSubcategories.FirstOrDefault(s => s.Sub.Id == bestMerchant.DefaultSubcategoryId.Value);
+                    if (foundSub != null)
+                    {
+                        targetCatName = foundSub.Parent.Name;
+                        subName = foundSub.Sub.Name;
+                    }
+                }
+
+                if (targetCatName == "Other" && bestMerchant.DefaultCategoryId.HasValue)
+                {
+                    var foundCat = rootCategories.FirstOrDefault(c => c.Id == bestMerchant.DefaultCategoryId.Value);
+                    if (foundCat != null)
+                    {
+                        targetCatName = foundCat.Name;
+                        subName = foundCat.Children.OrderBy(s => s.DisplayOrder).FirstOrDefault()?.Name ?? foundCat.Name;
+                    }
+                }
+
+                if (targetCatName == "Other" && bestMerchant.DefaultCategory != null)
+                {
+                    targetCatName = bestMerchant.DefaultCategory.Name;
+                    subName = bestMerchant.DefaultCategory.Children.OrderBy(s => s.DisplayOrder).FirstOrDefault()?.Name ?? targetCatName;
+                }
+
+                if (counts.ContainsKey(targetCatName)) counts[targetCatName]++;
+                else counts["Other"]++;
+
+                var txItem = BuildTxItem(bestMerchant.Name, subName);
+
+                if (catTxns.ContainsKey(targetCatName)) catTxns[targetCatName].Add(txItem);
+                else catTxns["Other"].Add(txItem);
+
+                matched = true;
+            }
+
+            // 2. Check Active PfmCategorizationRules (with PfmRuleConditions, ordered by Priority desc)
             if (!matched)
             {
-                foreach (var rule in activeRules)
+                foreach (var pfmRule in activePfmRules)
+                {
+                    if (pfmRule.Conditions == null || pfmRule.Conditions.Count == 0) continue;
+
+                    string matchedKeyword = pfmRule.Name;
+                    if (EvaluatePfmRuleConditions(pfmRule.Conditions, tx, narration, isCreditTx, out var condKeyword))
+                    {
+                        if (!string.IsNullOrWhiteSpace(condKeyword)) matchedKeyword = condKeyword;
+
+                        string targetCatName = "Other";
+                        string subName = "Uncategorized";
+
+                        if (pfmRule.SubcategoryId.HasValue)
+                        {
+                            var foundSub = allSubcategories.FirstOrDefault(s => s.Sub.Id == pfmRule.SubcategoryId.Value);
+                            if (foundSub != null)
+                            {
+                                targetCatName = foundSub.Parent.Name;
+                                subName = foundSub.Sub.Name;
+                            }
+                        }
+
+                        if (targetCatName == "Other" && pfmRule.CategoryId.HasValue)
+                        {
+                            var foundCat = rootCategories.FirstOrDefault(c => c.Id == pfmRule.CategoryId.Value);
+                            if (foundCat != null)
+                            {
+                                targetCatName = foundCat.Name;
+                                subName = foundCat.Children.OrderBy(s => s.DisplayOrder).FirstOrDefault()?.Name ?? foundCat.Name;
+                            }
+                        }
+
+                        if (counts.ContainsKey(targetCatName)) counts[targetCatName]++;
+                        else counts["Other"]++;
+
+                        var txItem = BuildTxItem(matchedKeyword, subName);
+
+                        if (catTxns.ContainsKey(targetCatName)) catTxns[targetCatName].Add(txItem);
+                        else catTxns["Other"].Add(txItem);
+
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+
+            // 3. Check Active Legacy CategoryRules fallback
+            if (!matched)
+            {
+                foreach (var rule in activeLegacyRules)
                 {
                     if (!string.IsNullOrEmpty(rule.Keyword) &&
                         narration.Contains(rule.Keyword.ToUpperInvariant()))
                     {
-                        var parentCat = rootCategories.FirstOrDefault(c =>
-                            c.Children.Any(s => string.Equals(s.Name, rule.Category, System.StringComparison.OrdinalIgnoreCase))
-                            || string.Equals(c.Name, rule.Category, System.StringComparison.OrdinalIgnoreCase));
+                        var matchedSub = allSubcategories.FirstOrDefault(s =>
+                            string.Equals(s.Sub.Name, rule.Category, System.StringComparison.OrdinalIgnoreCase));
+                        var parentCat = matchedSub?.Parent ?? rootCategories.FirstOrDefault(c =>
+                            string.Equals(c.Name, rule.Category, System.StringComparison.OrdinalIgnoreCase));
 
                         var catName = parentCat?.Name ?? "Other";
+                        var subName = matchedSub?.Sub.Name ?? parentCat?.Children.OrderBy(s => s.DisplayOrder).FirstOrDefault()?.Name ?? rule.Category;
+
                         if (counts.ContainsKey(catName)) counts[catName]++;
                         else counts["Other"]++;
 
-                        bool isCreditTx = tx.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Credit
-                            || string.Equals(catName, "Income", System.StringComparison.OrdinalIgnoreCase)
-                            || (narration.Contains("HAS BEEN CREDITED") && !narration.Contains("IS DEBITED"));
-
-                        var txItem = new
-                        {
-                            id = tx.Id,
-                            transactionDate = tx.TransactionDate,
-                            narration = tx.Narration,
-                            amount = tx.Amount,
-                            currency = tx.Currency,
-                            transactionType = isCreditTx ? "Credit" : tx.TransactionType.ToString(),
-                            direction = isCreditTx ? "CREDIT" : "DEBIT",
-                            balanceAfter = tx.BalanceAfter,
-                            matchedKeyword = rule.Keyword,
-                            subcategory = rule.Category,
-                            bankCode = tx.BankCode,
-                            bankName = tx.BankName
-                        };
+                        var txItem = BuildTxItem(rule.Keyword, subName);
 
                         if (catTxns.ContainsKey(catName)) catTxns[catName].Add(txItem);
                         else catTxns["Other"].Add(txItem);
@@ -1098,29 +1303,12 @@ public class StatementsController : ControllerBase
                 }
             }
 
-            // 3. Fallback: Uncategorized
+            // 4. Fallback: Uncategorized / Credit Deposit
             if (!matched)
             {
-                bool isCreditTx = tx.TransactionType == ThemarIP.Domain.Enums.Pfm.TransactionType.Credit
-                    || (narration.Contains("HAS BEEN CREDITED") && !narration.Contains("IS DEBITED"))
-                    || (narration.Contains("RECEIVED") && narration.Contains("FROM"));
                 string fallbackCat = isCreditTx && catTxns.ContainsKey("Income") ? "Income" : "Other";
                 counts[fallbackCat]++;
-                catTxns[fallbackCat].Add(new
-                {
-                    id = tx.Id,
-                    transactionDate = tx.TransactionDate,
-                    narration = tx.Narration,
-                    amount = tx.Amount,
-                    currency = tx.Currency,
-                    transactionType = isCreditTx ? "Credit" : tx.TransactionType.ToString(),
-                    direction = isCreditTx ? "CREDIT" : "DEBIT",
-                    balanceAfter = tx.BalanceAfter,
-                    matchedKeyword = "",
-                    subcategory = isCreditTx ? "Deposit" : "Uncategorized",
-                    bankCode = tx.BankCode,
-                    bankName = tx.BankName
-                });
+                catTxns[fallbackCat].Add(BuildTxItem("", isCreditTx ? "Freelance" : "Uncategorized"));
             }
         }
 
@@ -1130,12 +1318,103 @@ public class StatementsController : ControllerBase
                 categoryName = c.Name,
                 icon         = c.Icon,
                 color        = c.Color,
+                displayOrder = c.DisplayOrder,
+                isEnabled    = c.IsEnabled,
                 txnCount     = counts.ContainsKey(c.Name) ? counts[c.Name] : 0,
                 transactions = catTxns.ContainsKey(c.Name) ? catTxns[c.Name] : new System.Collections.Generic.List<object>()
             })
             .ToList();
 
         return Ok(result);
+    }
+
+    private static bool EvaluatePfmRuleConditions(
+        System.Collections.Generic.ICollection<ThemarIP.Domain.Entities.Pfm.PfmRuleCondition> conditions,
+        ThemarIP.Domain.Entities.Pfm.PfmTransaction tx,
+        string narrationUpper,
+        bool isCreditTx,
+        out string matchedValue)
+    {
+        matchedValue = string.Empty;
+        var ordered = conditions.OrderBy(c => c.OrderIndex).ToList();
+        if (ordered.Count == 0) return false;
+
+        bool result = true;
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            var c = ordered[i];
+            var targetVal = (c.Value ?? "").Trim();
+            var targetUpper = targetVal.ToUpperInvariant();
+            bool condHit = false;
+
+            switch (c.Field)
+            {
+                case ThemarIP.Domain.Enums.Pfm.RuleConditionField.TransactionType:
+                    var txTypeStr = isCreditTx ? "CREDIT" : "DEBIT";
+                    condHit = EvaluateStringOp(txTypeStr, targetUpper, c.Operator);
+                    break;
+
+                case ThemarIP.Domain.Enums.Pfm.RuleConditionField.Currency:
+                    condHit = EvaluateStringOp((tx.Currency ?? "OMR").ToUpperInvariant(), targetUpper, c.Operator);
+                    break;
+
+                case ThemarIP.Domain.Enums.Pfm.RuleConditionField.MccCode:
+                    condHit = EvaluateStringOp((tx.MccCode ?? "").ToUpperInvariant(), targetUpper, c.Operator);
+                    break;
+
+                case ThemarIP.Domain.Enums.Pfm.RuleConditionField.Amount:
+                    if (decimal.TryParse(targetVal, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var numVal))
+                    {
+                        condHit = c.Operator switch
+                        {
+                            ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.Equals => tx.Amount == numVal,
+                            ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.GreaterThan => tx.Amount > numVal,
+                            ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.LessThan => tx.Amount < numVal,
+                            _ => tx.Amount == numVal
+                        };
+                    }
+                    break;
+
+                default: // Narration, MerchantName, MerchantId
+                    condHit = EvaluateStringOp(narrationUpper, targetUpper, c.Operator);
+                    if (condHit && string.IsNullOrEmpty(matchedValue))
+                    {
+                        matchedValue = targetVal;
+                    }
+                    break;
+            }
+
+            if (i == 0)
+            {
+                result = condHit;
+            }
+            else
+            {
+                var prevLogic = ordered[i - 1].LogicOperator;
+                if (prevLogic == ThemarIP.Domain.Enums.Pfm.RuleConditionLogic.Or || c.LogicOperator == ThemarIP.Domain.Enums.Pfm.RuleConditionLogic.Or)
+                {
+                    result = result || condHit;
+                }
+                else
+                {
+                    result = result && condHit;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static bool EvaluateStringOp(string sourceUpper, string targetUpper, ThemarIP.Domain.Enums.Pfm.RuleConditionOperator op)
+    {
+        if (string.IsNullOrEmpty(targetUpper)) return false;
+        return op switch
+        {
+            ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.Equals => string.Equals(sourceUpper, targetUpper, System.StringComparison.OrdinalIgnoreCase),
+            ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.StartsWith => sourceUpper.StartsWith(targetUpper, System.StringComparison.OrdinalIgnoreCase),
+            ThemarIP.Domain.Enums.Pfm.RuleConditionOperator.EndsWith => sourceUpper.EndsWith(targetUpper, System.StringComparison.OrdinalIgnoreCase),
+            _ => sourceUpper.Contains(targetUpper, System.StringComparison.OrdinalIgnoreCase)
+        };
     }
 
     /// <summary>

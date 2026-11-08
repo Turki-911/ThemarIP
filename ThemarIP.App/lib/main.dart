@@ -7,6 +7,7 @@ import 'screens/terms_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/bmpf_main_screen.dart';
+import 'screens/bank_setup_screen.dart';
 import 'services/language_service.dart';
 import 'services/session_manager.dart';
 
@@ -33,7 +34,7 @@ void main() async {
   // Safe fallback UI if a rendering boundary error occurs (prevents blank white screen)
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Material(
-      color: const Color(0xFF0A0E1A),
+      color: const Color(0xFFF8FAFC),
       child: SafeArea(
         child: Center(
           child: Padding(
@@ -41,17 +42,17 @@ void main() async {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.refresh_rounded, size: 48, color: Color(0xFF00E5FF)),
+                const Icon(Icons.refresh_rounded, size: 48, color: Color(0xFF7C3AED)),
                 const SizedBox(height: 16),
                 const Text(
                   'Workspace Paused',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'The screen was paused while idle. Tap below to resume your workspace.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
@@ -59,8 +60,8 @@ void main() async {
                     navigatorKey.currentState?.pushNamedAndRemoveUntil('/categories', (r) => false);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E5FF),
-                    foregroundColor: const Color(0xFF0A0E1A),
+                    backgroundColor: const Color(0xFF7C3AED),
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   child: const Text('Resume Workspace', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -88,7 +89,7 @@ class BmpfApp extends StatelessWidget {
           navigatorKey: navigatorKey,
           title: 'ThemarIP — Financial Intelligence',
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.darkTheme,
+          theme: AppTheme.lightTheme,
           initialRoute: '/splash',
           builder: (context, child) {
             return Directionality(
@@ -104,6 +105,7 @@ class BmpfApp extends StatelessWidget {
             '/terms': (context) => const TermsScreen(),
             '/register': (context) => const RegisterScreen(),
             '/login': (context) => const LoginScreen(),
+            '/bank-setup': (context) => const BankSetupScreen(),
             '/upload': (context) => const BmpfMainScreen(initialPageIndex: 2),
             '/categories': (context) => const BmpfMainScreen(initialPageIndex: 0),
             '/hierarchy': (context) => const BmpfMainScreen(initialPageIndex: 0),

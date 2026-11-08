@@ -794,41 +794,78 @@ const _ruleCatMap = {
   'Streaming':        { categoryId:'cat-entertain',  subcategoryId:'sub-streaming'    },
 };
 
-function categorizeNarration(narration) {
+function categorizeNarration(narration, txType = 'debit', txAmount = 0) {
   const n = (narration || '').toUpperCase();
+  const isCredit = txType === 'credit' || (n.includes('HAS BEEN CREDITED') && !n.includes('IS DEBITED')) || (n.includes('RECEIVED') && n.includes('FROM')) || n.includes('MOBILE PAYMENT FROM');
+  const isDebitPosOrOut = !isCredit && (n.startsWith('POS ') || n.includes('IS DEBITED') || n.includes('MOBILE PAYMENT FOR'));
 
-  // 1. Check live Merchants and Aliases from themarip.db
+  const otherCatObj = Array.isArray(state.categories) ? state.categories.find(c => (c.name || '').toLowerCase() === 'other') : null;
+  const incomeCatObj = Array.isArray(state.categories) ? state.categories.find(c => (c.name || '').toLowerCase() === 'income') : null;
+  const otherCatId = otherCatObj ? otherCatObj.id : 'cat-other';
+  const incomeCatId = incomeCatObj ? incomeCatObj.id : otherCatId;
+  const uncatSubObj = Array.isArray(state.subcategories) ? state.subcategories.find(s => (s.name || '').toLowerCase() === 'uncategorized') : null;
+  const freelanceSubObj = Array.isArray(state.subcategories) ? state.subcategories.find(s => (s.name || '').toLowerCase() === 'freelance') : null;
+  const uncatSubId = uncatSubObj ? uncatSubObj.id : 'sub-uncategorized';
+  const freelanceSubId = freelanceSubObj ? freelanceSubObj.id : uncatSubId;
+
+  // 1. Check live Merchants and Aliases from themarip.db (Longest-Match-First specificity)
   if (Array.isArray(state.merchants)) {
+    let bestMerchant = null;
+    let bestLen = 0;
+
     for (const m of state.merchants) {
       if (m.status !== 'active') continue;
-      // Match merchant name or any of its aliases
-      const matchesName = m.name && n.includes(m.name.toUpperCase());
-      const matchesAlias = Array.isArray(m.aliases) && m.aliases.some(a => a && n.includes(a.toUpperCase()));
-
-      if (matchesName || matchesAlias) {
-        const catId = m.defaultCategoryId || 'cat-other';
-        const subId = m.defaultSubcategoryId || '';
-        const conf = m.defaultConfidence || 95;
-        return {
-          merchantName:  m.name,
-          m:             m.id,
-          categoryId:    catId,
-          cat:           catId,
-          subcategoryId: subId,
-          sub:           subId,
-          confidence:    conf,
-          conf:          conf,
-          status:        'categorized',
-          source:        'MERCHANT_MAPPING',
-          src:           'MERCHANT_MAPPING',
-          scores: { merchantMatch:45, mccMatch:25, narrationMatch:15, historicalMatch:10, amountPattern:0 }
-        };
+      if (isDebitPosOrOut && ((m.defaultCategoryName || '').toLowerCase() === 'income' || m.defaultCategoryId === incomeCatId)) {
+        continue;
       }
+
+      let maxLen = 0;
+      const mNameUpper = (m.name || '').trim().toUpperCase();
+      if (mNameUpper && n.includes(mNameUpper)) {
+        maxLen = mNameUpper.length;
+      }
+      if (Array.isArray(m.aliases)) {
+        for (const a of m.aliases) {
+          const aUpper = (a || '').trim().toUpperCase();
+          if (aUpper && aUpper.length > maxLen && n.includes(aUpper)) {
+            maxLen = aUpper.length;
+          }
+        }
+      }
+
+      if (maxLen > 0) {
+        const mConf = m.defaultConfidence || 95;
+        const bestConf = bestMerchant ? (bestMerchant.defaultConfidence || 95) : 0;
+        if (!bestMerchant || maxLen > bestLen || (maxLen === bestLen && mConf > bestConf)) {
+          bestMerchant = m;
+          bestLen = maxLen;
+        }
+      }
+    }
+
+    if (bestMerchant) {
+      const catId = bestMerchant.defaultCategoryId || otherCatId;
+      const subId = bestMerchant.defaultSubcategoryId || '';
+      const conf = bestMerchant.defaultConfidence || 95;
+      return {
+        merchantName:  bestMerchant.name,
+        m:             bestMerchant.id,
+        categoryId:    catId,
+        cat:           catId,
+        subcategoryId: subId,
+        sub:           subId,
+        confidence:    conf,
+        conf:          conf,
+        status:        'categorized',
+        source:        'MERCHANT_MAPPING',
+        src:           'MERCHANT_MAPPING',
+        scores: { merchantMatch:45, mccMatch:25, narrationMatch:15, historicalMatch:10, amountPattern:0 }
+      };
     }
   }
 
-  // 2. Use live CategoryRules from themarip.db (sorted by Priority asc/desc)
-  const sorted = [..._dbCategoryRules].sort((a, b) => (a.priority || 99) - (b.priority || 99));
+  // 2. Use live PfmCategorizationRules from themarip.db (sorted by Priority descending)
+  const sorted = [..._dbCategoryRules].sort((a, b) => (b.priority || 0) - (a.priority || 0));
   for (const rule of sorted) {
     const isActive = rule.status === 'active' || rule.isActive === true;
     if (!isActive) continue;
@@ -836,19 +873,49 @@ function categorizeNarration(narration) {
     // Evaluate PfmCategorizationRule conditions
     if (Array.isArray(rule.conditions) && rule.conditions.length > 0) {
       let matchedKeyword = '';
-      const allMatched = rule.conditions.every(c => {
-        const val = (c.value || '').toUpperCase();
-        if (!val) return false;
+      let ruleHit = true;
+
+      for (let i = 0; i < rule.conditions.length; i++) {
+        const c = rule.conditions[i];
+        const val = (c.value || '').trim().toUpperCase();
         const op = (c.operator || 'contains').toLowerCase();
+        const field = (c.field || 'narration').toLowerCase();
         let hit = false;
-        if (op === 'contains') hit = n.includes(val);
-        else if (op === 'equals') hit = n === val;
-        else if (op === 'starts_with') hit = n.startsWith(val);
-        else if (op === 'ends_with') hit = n.endsWith(val);
-        if (hit && !matchedKeyword) matchedKeyword = c.value;
-        return hit;
-      });
-      if (allMatched && rule.categoryId) {
+
+        if (!val) {
+          hit = false;
+        } else if (field === 'type' || field === 'transaction_type' || field === 'transactiontype') {
+          const txTypeUpper = isCredit ? 'CREDIT' : 'DEBIT';
+          hit = op === 'equals' ? txTypeUpper === val : txTypeUpper.includes(val);
+        } else if (field === 'amount') {
+          const numVal = parseFloat(val);
+          if (!isNaN(numVal)) {
+            if (op === 'greater_than') hit = txAmount > numVal;
+            else if (op === 'less_than') hit = txAmount < numVal;
+            else hit = txAmount === numVal;
+          }
+        } else {
+          if (op === 'contains') hit = n.includes(val);
+          else if (op === 'equals') hit = n === val;
+          else if (op === 'starts_with') hit = n.startsWith(val);
+          else if (op === 'ends_with') hit = n.endsWith(val);
+          if (hit && !matchedKeyword) matchedKeyword = c.value;
+        }
+
+        if (i === 0) {
+          ruleHit = hit;
+        } else {
+          const prevLogic = (rule.conditions[i - 1].logic || 'AND').toUpperCase();
+          const curLogic = (c.logic || 'AND').toUpperCase();
+          if (prevLogic === 'OR' || curLogic === 'OR') {
+            ruleHit = ruleHit || hit;
+          } else {
+            ruleHit = ruleHit && hit;
+          }
+        }
+      }
+
+      if (ruleHit && rule.categoryId) {
         const conf = rule.confidence || 90;
         const mName = matchedKeyword || rule.name || 'Other';
         return {
@@ -870,14 +937,21 @@ function categorizeNarration(narration) {
 
     // Legacy keyword rule fallback
     if (rule.keyword && n.includes(rule.keyword.toUpperCase())) {
-      const ids = _ruleCatMap[rule.category] || { categoryId: 'cat-other', subcategoryId: '' };
+      const subMatch = Array.isArray(state.subcategories)
+        ? state.subcategories.find(s => (s.name || '').toLowerCase() === (rule.category || '').toLowerCase())
+        : null;
+      const catMatch = subMatch
+        ? state.categories.find(c => c.id === subMatch.categoryId)
+        : (Array.isArray(state.categories) ? state.categories.find(c => (c.name || '').toLowerCase() === (rule.category || '').toLowerCase()) : null);
+      const resolvedCatId = catMatch ? catMatch.id : ((_ruleCatMap[rule.category] && _ruleCatMap[rule.category].categoryId) || otherCatId);
+      const resolvedSubId = subMatch ? subMatch.id : ((_ruleCatMap[rule.category] && _ruleCatMap[rule.category].subcategoryId) || '');
       return {
         merchantName:    rule.keyword,
         m:               `m-${rule.keyword.toLowerCase().replace(/\s+/g, '-')}`,
-        categoryId:      ids.categoryId,
-        cat:             ids.categoryId,
-        subcategoryId:   ids.subcategoryId,
-        sub:             ids.subcategoryId,
+        categoryId:      resolvedCatId,
+        cat:             resolvedCatId,
+        subcategoryId:   resolvedSubId,
+        sub:             resolvedSubId,
         confidence:      90,
         conf:            90,
         status:          'categorized',
@@ -888,19 +962,21 @@ function categorizeNarration(narration) {
     }
   }
 
-  // Uncategorized fallback: keep merchantName as 'Other'
+  // Uncategorized / Credit Deposit fallback using live DB category IDs
+  const fallbackCatId = isCredit ? incomeCatId : otherCatId;
+  const fallbackSubId = isCredit ? freelanceSubId : uncatSubId;
   return {
-    merchantName: 'Other',
+    merchantName: isCredit ? 'Deposit' : 'Other',
     m: '',
-    categoryId: 'cat-other',
-    cat: 'cat-other',
-    subcategoryId: 'sub-uncategorized',
-    sub: 'sub-uncategorized',
-    confidence: 30,
-    conf: 30,
-    status: 'uncategorized',
-    source: 'UNCATEGORIZED',
-    src: 'UNCATEGORIZED',
+    categoryId: fallbackCatId,
+    cat: fallbackCatId,
+    subcategoryId: fallbackSubId,
+    sub: fallbackSubId,
+    confidence: isCredit ? 75 : 30,
+    conf: isCredit ? 75 : 30,
+    status: isCredit ? 'categorized' : 'uncategorized',
+    source: isCredit ? 'CREDIT_FALLBACK' : 'UNCATEGORIZED',
+    src: isCredit ? 'CREDIT_FALLBACK' : 'UNCATEGORIZED',
     scores: { merchantMatch: 0, mccMatch: 0, narrationMatch: 20, historicalMatch: 5, amountPattern: 5 }
   };
 }
@@ -915,7 +991,7 @@ async function loadRealTransactions() {
           const narrationText = t.narration || t.Narration || 'Unspecified Transaction';
           const amountValue   = Math.abs(t.amount !== undefined ? t.amount : (t.Amount !== undefined ? t.Amount : 0));
           const balanceValue  = t.balanceAfter !== undefined ? t.balanceAfter : (t.balance !== undefined ? t.balance : (t.BalanceAfter !== undefined ? t.BalanceAfter : (t.Balance !== undefined ? t.Balance : 0)));
-          const txType        = (t.transactionType === 0 || t.TransactionType === 0) ? 'debit' : 'credit';
+          const txType        = (t.transactionType === 0 || t.TransactionType === 0 || t.transactionType === 'Debit') ? 'debit' : 'credit';
           const rawDateStr    = t.transactionDate || t.TransactionDate || '';
           const txDate        = rawDateStr ? rawDateStr.split('T')[0] : '2026-09-01';
           const txFullDate    = rawDateStr || '2026-09-01T00:00:00';
@@ -925,7 +1001,7 @@ async function loadRealTransactions() {
           const userObj       = (typeof Users !== 'undefined' && Array.isArray(Users._users)) ? Users._users.find(u => u.id === userIdVal) : null;
           const userLabel     = userObj ? (userObj.fullName || userObj.email) : '';
 
-          const catInfo = categorizeNarration(narrationText);
+          const catInfo = categorizeNarration(narrationText, txType, amountValue);
 
           return {
             id: t.id || t.Id || `txn-live-${idx}`,
@@ -977,6 +1053,7 @@ const Nav = {
     'view-corrections':  { title:'User Corrections',      subtitle:'Review and act on user-submitted category corrections.' },
     'view-intelligence': { title:'Intelligence Rules',    subtitle:'Financial insight triggers based on spending patterns and balances.' },
     'view-users':        { title:'User Management',       subtitle:'Inspect user accounts, manage access status, and view profiles across all apps.' },
+    'view-tx-msg-parser':{ title:'Transaction Message Parser', subtitle:'Database-driven bank SMS & statement extraction rules, clean descriptions, and manual review queue.' },
     'view-settings':     { title:'Settings',              subtitle:'API configuration and audit log.' },
   },
 
@@ -1021,6 +1098,7 @@ const Nav = {
       'view-intelligence': Intelligence.render,
       'view-users':        Users.render,
       'view-sms-config':   () => SmsConfig.render(),
+      'view-tx-msg-parser':() => typeof TxMessageParser !== 'undefined' && TxMessageParser.render(),
       'view-settings':     Settings.render,
     };
     if (renders[viewId]) renders[viewId]();
@@ -1499,14 +1577,11 @@ const Categories = {
             await loadCategoryRulesFromDb();
             Toast.success(`Subcategory "${name}" updated and saved to themarip.db.`);
           } else {
-            const sub = state.subcategories.find(s=>s.id===id);
-            if (sub) sub.name = name;
-            Toast.success(`Subcategory updated.`);
+            Toast.error(`Failed to update subcategory "${name}" (HTTP ${res.status}).`);
           }
         } catch(e) {
           console.error(e);
-          const sub = state.subcategories.find(s=>s.id===id);
-          if (sub) sub.name = name;
+          Toast.error(`Failed to update subcategory "${name}".`);
         }
       } else {
         try {
@@ -1518,9 +1593,12 @@ const Categories = {
           if (res.ok) {
             await loadCategoryRulesFromDb();
             Toast.success(`Subcategory "${name}" created and saved to themarip.db.`);
+          } else {
+            Toast.error(`Failed to create subcategory "${name}" (HTTP ${res.status}).`);
           }
         } catch(e) {
           console.error(e);
+          Toast.error(`Failed to create subcategory "${name}".`);
         }
       }
     } else {
@@ -1538,13 +1616,11 @@ const Categories = {
             await loadCategoryRulesFromDb();
             Toast.success(`Category "${name}" updated and saved to themarip.db.`);
           } else {
-            if (cat) { cat.name=name; cat.icon=icon; }
-            Toast.success(`Category updated.`);
+            Toast.error(`Failed to update category "${name}" (HTTP ${res.status}).`);
           }
         } catch(e) {
           console.error(e);
-          const cat = state.categories.find(c=>c.id===id);
-          if (cat) { cat.name=name; cat.icon=icon; }
+          Toast.error(`Failed to update category "${name}".`);
         }
       } else {
         try {
@@ -1558,9 +1634,12 @@ const Categories = {
           if (res.ok) {
             await loadCategoryRulesFromDb();
             Toast.success(`Category "${name}" created and saved to themarip.db.`);
+          } else {
+            Toast.error(`Failed to create category "${name}" (HTTP ${res.status}).`);
           }
         } catch(e) {
           console.error(e);
+          Toast.error(`Failed to create category "${name}".`);
         }
       }
     }
@@ -3125,6 +3204,7 @@ const App = {
         'view-intelligence': Intelligence.render,
         'view-users': Users.render,
         'view-sms-config': () => SmsConfig.render(),
+        'view-tx-msg-parser': () => typeof TxMessageParser !== 'undefined' && TxMessageParser.render(),
         'view-settings': Settings.render,
       };
       if (renders[view]) renders[view]();

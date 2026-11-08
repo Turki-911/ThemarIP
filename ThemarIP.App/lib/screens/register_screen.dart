@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../config/app_theme.dart';
 import '../services/api_service.dart';
+import '../services/bank_setup_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -109,8 +110,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      // Automatically route into Dashboard/Categories
-      Navigator.of(context).pushReplacementNamed('/categories');
+      // Ask which banks to connect before routing into the hierarchy page
+      await BankSetupService.routeAfterAuth(context);
     } catch (e) {
       String msg = 'Verification failed. Please try again.';
       if (e is DioException) {
@@ -162,7 +163,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             onPressed: () {
               Navigator.of(context).pushReplacementNamed('/login');
             },
-            child: const Text('Sign In', style: TextStyle(color: Colors.white70)),
+            child: const Text('Sign In', style: TextStyle(color: AppTheme.primaryPurple, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -176,11 +177,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               color: AppTheme.bgCard,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: AppTheme.borderGlow),
-              boxShadow: const [
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x33000000),
-                  blurRadius: 30,
-                  spreadRadius: 5,
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
@@ -251,19 +252,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 20),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00E5FF).withValues(alpha: 0.12),
+                      color: const Color(0xFF0284C7).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.35)),
+                      border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.35)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.verified_outlined, color: Color(0xFF00E5FF), size: 20),
+                        const Icon(Icons.verified_outlined, color: Color(0xFF0284C7), size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             'Verification OTP: $_previewOtp',
                             style: const TextStyle(
-                              color: Color(0xFF00E5FF),
+                              color: Color(0xFF0284C7),
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
                             ),
@@ -273,7 +274,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           onPressed: () {
                             _otpController.text = _previewOtp!;
                           },
-                          child: const Text('Auto-fill', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: const Text('Auto-fill', style: TextStyle(color: AppTheme.primaryPurple, fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),

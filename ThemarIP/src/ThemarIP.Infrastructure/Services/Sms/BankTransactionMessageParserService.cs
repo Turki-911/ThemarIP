@@ -519,6 +519,10 @@ public class BankTransactionMessageParserService : IBankTransactionMessageParser
             {
                 parsed.BalanceAfter = tx.BalanceAfter;
             }
+            if (parsed.TransactionDate.HasValue && parsed.TransactionDate.Value.TimeOfDay != TimeSpan.Zero && tx.TransactionDate.TimeOfDay == TimeSpan.Zero)
+            {
+                tx.TransactionDate = parsed.TransactionDate.Value;
+            }
             parsed.DeduplicationKey = BuildDeduplicationKey(tx.UserId, parsed);
 
             if (byTxId.TryGetValue(tx.Id, out var existing))

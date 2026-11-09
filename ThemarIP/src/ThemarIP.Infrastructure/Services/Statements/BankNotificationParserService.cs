@@ -174,18 +174,23 @@ public class BankNotificationParserService : IBankNotificationParserService
 
     private DateTimeOffset ExtractTransactionDate(string text)
     {
-        // 06-09-2026 or 06/09/2026
-        var m = Regex.Match(text, @"\b([0-3]?[0-9])[-/]([0-1]?[0-9])[-/](20\d{2})\b");
-        if (m.Success && 
-            int.TryParse(m.Groups[1].Value, out var day) && 
-            int.TryParse(m.Groups[2].Value, out var month) && 
-            int.TryParse(m.Groups[3].Value, out var year))
+        // 06-09-2026 18:25:24 or 06/09/2026 18:25
+        var m = Regex.Match(text, @"\b([0-3]?[0-9])[-/]([0-1]?[0-9])[-/](20\d{2}|\d{2})(?:\s+([0-2]?[0-9]):([0-5][0-9])(?::([0-5][0-9]))?)?\b");
+        if (m.Success &&
+            int.TryParse(m.Groups[1].Value, out var day) &&
+            int.TryParse(m.Groups[2].Value, out var month) &&
+            int.TryParse(m.Groups[3].Value, out var rawYear))
         {
-            try { return new DateTimeOffset(new DateTime(year, month, day), TimeSpan.Zero); } catch { }
+            var year = rawYear < 100 ? (2000 + rawYear) : rawYear;
+            int hr = 0, min = 0, sec = 0;
+            if (m.Groups[4].Success) int.TryParse(m.Groups[4].Value, out hr);
+            if (m.Groups[5].Success) int.TryParse(m.Groups[5].Value, out min);
+            if (m.Groups[6].Success) int.TryParse(m.Groups[6].Value, out sec);
+            try { return new DateTimeOffset(new DateTime(year, month, day, hr, min, sec), TimeSpan.Zero); } catch { }
         }
 
-        // 06-SEP-2026 or 06-Sep-26
-        m = Regex.Match(text, @"\b([0-3]?[0-9])[-/ ]([A-Za-z]{3})[-/ ](20\d{2}|\d{2})\b");
+        // 06-SEP-2026 or 06-Sep-26 (with optional HH:mm:ss)
+        m = Regex.Match(text, @"\b([0-3]?[0-9])[-/ ]([A-Za-z]{3})[-/ ](20\d{2}|\d{2})(?:\s+[0-2]?[0-9]:[0-5][0-9](?::[0-5][0-9])?)?\b");
         if (m.Success && DateTime.TryParse(m.Value, out var parsedDt))
         {
             return new DateTimeOffset(parsedDt, TimeSpan.Zero);

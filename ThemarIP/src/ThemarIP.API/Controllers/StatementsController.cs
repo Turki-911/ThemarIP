@@ -1110,10 +1110,23 @@ public class StatementsController : ControllerBase
                 ? parsedMsg.GeneratedDescription
                 : (tx.Narration ?? "Transaction");
 
+            // Prefer the parsed message date+time when PfmTransaction.TransactionDate has 00:00:00 time, or fall back to CreatedAt time
+            var effectiveTxDate = tx.TransactionDate;
+            if (parsedMsg.TransactionDate.HasValue &&
+                (effectiveTxDate.TimeOfDay == System.TimeSpan.Zero || parsedMsg.TransactionDate.Value.TimeOfDay != System.TimeSpan.Zero))
+            {
+                effectiveTxDate = parsedMsg.TransactionDate.Value;
+            }
+            else if (effectiveTxDate.TimeOfDay == System.TimeSpan.Zero && tx.CreatedAt.Date == effectiveTxDate.Date && tx.CreatedAt.TimeOfDay != System.TimeSpan.Zero)
+            {
+                effectiveTxDate = tx.CreatedAt;
+            }
+
             object BuildTxItem(string matchedKw, string subCat) => new
             {
                 id = tx.Id,
-                transactionDate = tx.TransactionDate,
+                transactionDate = effectiveTxDate,
+                createdAt = tx.CreatedAt,
                 narration = cleanDescription,
                 generatedDescription = cleanDescription,
                 originalMessage = tx.Narration,

@@ -1001,16 +1001,89 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     return null;
   }
 
-  DateTime? _parseTxDateTime(String? dateStr) {
-    if (dateStr == null || dateStr.trim().isEmpty) return null;
-    final parsed = DateTime.tryParse(dateStr.trim());
-    if (parsed != null) return parsed;
-    return _parseTxDate(dateStr);
+  DateTime? _parseTxDateTime(String? dateStr, [String? rawMessage]) {
+    DateTime? parsed;
+    if (dateStr != null && dateStr.trim().isNotEmpty) {
+      parsed = DateTime.tryParse(dateStr.trim());
+      if (parsed == null) {
+        final parts = dateStr.trim().split(RegExp(r'[/.-]'));
+        if (parts.length >= 3) {
+          try {
+            final p0 = int.parse(parts[0]);
+            final p1 = int.parse(parts[1]);
+            final p2Rest = parts[2].trim().split(RegExp(r'\s+'));
+            final p2 = int.parse(p2Rest.first);
+            int hr = 0, min = 0, sec = 0;
+            if (p2Rest.length > 1) {
+              final tParts = p2Rest[1].split(':');
+              if (tParts.length >= 2) {
+                hr = int.tryParse(tParts[0]) ?? 0;
+                min = int.tryParse(tParts[1]) ?? 0;
+                if (tParts.length >= 3) sec = int.tryParse(tParts[2]) ?? 0;
+              }
+            }
+            if (p0 > 1900) {
+              parsed = DateTime(p0, p1, p2, hr, min, sec);
+            } else {
+              final yearFull = p2 < 100 ? (2000 + p2) : p2;
+              parsed = DateTime(yearFull, p1, p0, hr, min, sec);
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    // If parsed time is 00:00:00 (or date was missing) and rawMessage contains an explicit timestamp ("on 29/10/2026 22:56:45"), extract it
+    if ((parsed == null || (parsed.hour == 0 && parsed.minute == 0 && parsed.second == 0)) &&
+        rawMessage != null &&
+        rawMessage.isNotEmpty) {
+      final m = RegExp(
+        r'\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?',
+      ).firstMatch(rawMessage);
+      if (m != null) {
+        final d = int.tryParse(m.group(1)!) ?? 1;
+        final mo = int.tryParse(m.group(2)!) ?? 1;
+        final yrRaw = int.tryParse(m.group(3)!) ?? 2026;
+        final yr = yrRaw < 100 ? 2000 + yrRaw : yrRaw;
+        final hr = int.tryParse(m.group(4)!) ?? 0;
+        final mi = int.tryParse(m.group(5)!) ?? 0;
+        final sc = int.tryParse(m.group(6) ?? '0') ?? 0;
+        try {
+          return DateTime(yr, mo, d, hr, mi, sc);
+        } catch (_) {}
+      }
+    }
+
+    return parsed ?? _parseTxDate(dateStr);
+  }
+
+  String _formatTxDateTime(BmpfTransaction tx, {bool includeSeconds = false}) {
+    final dt = _parseTxDateTime(tx.postDate ?? tx.valueDate, tx.originalMessage ?? tx.narration);
+    if (dt == null) return tx.postDate ?? '--';
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final hasTime = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
+    if (!hasTime) {
+      // Check if raw postDate string explicitly had a non-zero time or if we should still show time when present in string
+      final raw = tx.postDate ?? '';
+      if (!raw.contains(':')) return '$y-$m-$d';
+    }
+    final periodEn = dt.hour >= 12 ? 'PM' : 'AM';
+    final periodAr = dt.hour >= 12 ? 'م' : 'ص';
+    final hour12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final hh = hour12.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    final ss = dt.second.toString().padLeft(2, '0');
+    final timePart = includeSeconds && dt.second != 0
+        ? '$hh:$mm:$ss ${LanguageService.isArabic ? periodAr : periodEn}'
+        : '$hh:$mm ${LanguageService.isArabic ? periodAr : periodEn}';
+    return '$y-$m-$d • $timePart';
   }
 
   int _compareTransactionsNewToOld(BmpfTransaction a, BmpfTransaction b) {
-    final dtA = _parseTxDateTime(a.postDate ?? a.valueDate);
-    final dtB = _parseTxDateTime(b.postDate ?? b.valueDate);
+    final dtA = _parseTxDateTime(a.postDate ?? a.valueDate, a.originalMessage ?? a.narration);
+    final dtB = _parseTxDateTime(b.postDate ?? b.valueDate, b.originalMessage ?? b.narration);
     if (dtA == null && dtB == null) return 0;
     if (dtA == null) return 1;
     if (dtB == null) return -1;
@@ -3108,7 +3181,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${tx.postDate ?? '--'} · ${tx.category}',
+                  '${_formatTxDateTime(tx)} · ${tx.category}',
                   style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                 ),
               ],
@@ -4694,7 +4767,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         Text(
-                                          '$displayBankName${tx.postDate != null ? ' • ${tx.postDate!.substring(0, math.min(10, tx.postDate!.length))}' : ''}',
+                                          '$displayBankName • ${_formatTxDateTime(tx)}',
                                           style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
                                         ),
                                       ],
@@ -4725,7 +4798,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   void _showTransactionDetailsSheet(BmpfTransaction tx, String displayBankName, bool isCredit) {
     final rawMessage = tx.originalMessage ?? tx.narration;
-    final dateStr = tx.postDate != null ? tx.postDate!.substring(0, math.min(19, tx.postDate!.length)).replaceFirst('T', ' ') : '--';
+    final dateTimeStr = _formatTxDateTime(tx, includeSeconds: true);
 
     showModalBottomSheet(
       context: context,
@@ -4793,7 +4866,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                       _buildTxDetailRow(LanguageService.tr('Account / Card', 'الحساب / البطاقة'), tx.accountNumberMasked!),
                     if (tx.transactionReference != null && tx.transactionReference!.isNotEmpty)
                       _buildTxDetailRow(LanguageService.tr('Reference', 'المرجع'), tx.transactionReference!),
-                    _buildTxDetailRow(LanguageService.tr('Date', 'التاريخ'), dateStr),
+                    _buildTxDetailRow(LanguageService.tr('Date & Time', 'التاريخ والوقت'), dateTimeStr),
                     _buildTxDetailRow(LanguageService.tr('Confidence', 'دقة التحليل'), '${tx.confidence}%'),
                   ],
                 ),

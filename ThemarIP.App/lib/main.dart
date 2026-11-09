@@ -109,6 +109,7 @@ class BmpfApp extends StatelessWidget {
             '/upload': (context) => const BmpfMainScreen(initialPageIndex: 2),
             '/categories': (context) => const BmpfMainScreen(initialPageIndex: 0),
             '/hierarchy': (context) => const BmpfMainScreen(initialPageIndex: 0),
+            '/budgeting': (context) => const BmpfMainScreen(initialPageIndex: 3),
             '/profile': (context) => const BmpfMainScreen(initialPageIndex: 1),
           },
         );

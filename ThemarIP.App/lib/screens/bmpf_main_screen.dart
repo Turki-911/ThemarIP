@@ -12,6 +12,9 @@ import '../services/auth_service.dart';
 import '../services/bank_setup_service.dart';
 import '../services/language_service.dart';
 import '../services/sms_service.dart';
+import '../budgeting/main.dart';
+import '../budgeting/state/budget_controller.dart';
+import '../budgeting/theme/app_theme.dart' show AppColors;
 
 class LocalBank {
   final String code;
@@ -394,8 +397,9 @@ class BmpfMainScreen extends StatefulWidget {
 
 class _BmpfMainScreenState extends State<BmpfMainScreen> {
   final ApiService _apiService = ApiService();
+  final BudgetController _budgetController = BudgetController();
 
-  // Page switcher: 0 = Ingestion/Extractor (/upload), 1 = Category Hierarchy (/hierarchy or /categories)
+  // Page switcher: 0 = Category Hierarchy (/hierarchy or /categories), 1 = Profile, 2 = Extractor, 3 = Budgeting
   int _selectedPageIndex = 0;
 
   // Selected Local Bank for statement parsing format
@@ -497,6 +501,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   @override
   void dispose() {
     _bankSearchController.dispose();
+    _budgetController.dispose();
     super.dispose();
   }
 
@@ -1203,6 +1208,10 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         })
         .where((node) => node.txnCount > 0 && node.transactions.isNotEmpty)
         .toList();
+    _budgetController.syncWithHierarchyCategories(
+      _rawCategories,
+      activePeriodNodes: _categories,
+    );
   }
 
   void _applyBankFilter() => _applyFilters();
@@ -1325,9 +1334,22 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           _rawCategories = nodes;
           _userUploadedBanks = detectedBanks;
           _applyBankFilter();
+          _budgetController.syncWithHierarchyCategories(
+            _rawCategories,
+            activePeriodNodes: _categories,
+          );
           _isLoadingCategories = false;
         });
       }
+      _apiService.getBudgetOverview(
+        userId: _currentUser?.id,
+        email: _currentUser?.email,
+      ).then((overview) {
+        if (mounted && overview.isNotEmpty) {
+          _budgetController.applyServerOverview(overview);
+          setState(() {});
+        }
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _isLoadingCategories = false);
@@ -1344,7 +1366,9 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         return Directionality(
           textDirection: LanguageService.textDirection,
           child: Scaffold(
-            backgroundColor: const Color(0xFFF8FAFC),
+            backgroundColor: _selectedPageIndex == 3
+                ? AppColors.scaffoldBackground
+                : const Color(0xFFF8FAFC),
             appBar: _buildAppBar(),
             body: Stack(
               children: [
@@ -1681,14 +1705,15 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   }
 
   // ============================================================
-  // FLOATING BOTTOM NAVIGATION BAR (COMPACT CAPSULE MATCHING IMAGE 2)
+  // FLOATING BOTTOM NAVIGATION BAR (HIERARCHY • BUDGETING • PROFILE)
   // ============================================================
   Widget _buildFloatingBottomNavBar() {
     final isHierarchy = _selectedPageIndex == 0;
+    final isBudgeting = _selectedPageIndex == 3;
     final isProfile = _selectedPageIndex == 1;
 
     return Container(
-      width: 172,
+      width: 264,
       height: 66,
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
@@ -1757,6 +1782,47 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           ),
           const SizedBox(width: 4),
 
+          // Budgeting Tab (Center — right next to Hierarchy)
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _selectedPageIndex = 3);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: isBudgeting
+                      ? AppColors.primaryPurple.withValues(alpha: 0.14)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(28),
+                  border: isBudgeting
+                      ? Border.all(color: AppColors.primaryPurple.withValues(alpha: 0.6))
+                      : null,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.pie_chart_outline_rounded,
+                      size: 20,
+                      color: isBudgeting ? AppColors.primaryPurple : const Color(0xFF475569),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      LanguageService.tr('Budgeting', 'الميزانية'),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: isBudgeting ? FontWeight.bold : FontWeight.w600,
+                        color: isBudgeting ? AppColors.primaryPurple : const Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+
           // Profile Tab (Right)
           Expanded(
             child: GestureDetector(
@@ -1809,6 +1875,48 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
         return _buildProfilePage();
       case 2:
         return _buildExtractorPage();
+      case 3:
+        return BudgetingFlowView(
+          controller: _budgetController,
+          onExitToHierarchy: () {
+            setState(() => _selectedPageIndex = 0);
+          },
+          onBudgetStarted: (ctrl) async {
+            try {
+              final result = await _apiService.saveBudgetSetup(
+                userId: _currentUser?.id,
+                email: _currentUser?.email,
+                monthlyTotalOmr: ctrl.monthlyTotal,
+                rollover: ctrl.rollover,
+                categoryBudgetsOmr: ctrl.categoryBudgets,
+              );
+              if (result.isNotEmpty && result['hasConfiguredBudget'] == true) {
+                ctrl.applyServerOverview(result);
+              } else {
+                ctrl.markBudgetStarted();
+              }
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Budget saved successfully to database'),
+                    backgroundColor: Color(0xFF10B981),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                setState(() {});
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error saving budget: $e'),
+                    backgroundColor: const Color(0xFFEF4444),
+                  ),
+                );
+              }
+            }
+          },
+        );
       default:
         return _buildCategoriesPage();
     }
@@ -3776,93 +3884,98 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF7C3AED)));
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return ListenableBuilder(
+      listenable: _budgetController,
+      builder: (context, _) {
+        return ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            Text(
-              LanguageService.tr('Category Hierarchy', 'تصنيف المصاريف والفئات'),
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
-            ),
-            InkWell(
-              onTap: () {
-                _onSelectHierarchyBank('ALL');
-                _fetchCategoryHierarchy();
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _selectedHierarchyBankCode == 'ALL'
-                      ? const Color(0xFF10B981).withValues(alpha: 0.14)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _selectedHierarchyBankCode == 'ALL'
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFFE2E8F0),
-                  ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  LanguageService.tr('Category Hierarchy', 'تصنيف المصاريف والفئات'),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.sync_rounded,
-                      size: 14,
-                      color: _selectedHierarchyBankCode == 'ALL' ? const Color(0xFF059669) : const Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      LanguageService.tr('All Connected Banks', 'جميع البنوك المرتبطة'),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _selectedHierarchyBankCode == 'ALL' ? const Color(0xFF059669) : const Color(0xFF64748B),
+                InkWell(
+                  onTap: () {
+                    _onSelectHierarchyBank('ALL');
+                    _fetchCategoryHierarchy();
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _selectedHierarchyBankCode == 'ALL'
+                          ? const Color(0xFF10B981).withValues(alpha: 0.14)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _selectedHierarchyBankCode == 'ALL'
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFFE2E8F0),
                       ),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.sync_rounded,
+                          size: 14,
+                          color: _selectedHierarchyBankCode == 'ALL' ? const Color(0xFF059669) : const Color(0xFF64748B),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          LanguageService.tr('All Connected Banks', 'جميع البنوك المرتبطة'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: _selectedHierarchyBankCode == 'ALL' ? const Color(0xFF059669) : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
+            const SizedBox(height: 16),
+
+            // Multi-Bank Card Carousel with Add (+) Button (Matching Image 3)
+            _buildBankCardCarousel(),
+            const SizedBox(height: 16),
+
+            if (_rawCategories.isNotEmpty || _categories.isNotEmpty) ...[
+              _buildCategoryPieChartCard(),
+              const SizedBox(height: 16),
+            ],
+
+            if (_categories.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Center(
+                  child: Text(
+                    LanguageService.tr(
+                      'No categories found for this selection.',
+                      'لا توجد فئات تحتوي على عمليات لهذا الاختيار.',
+                    ),
+                    style: const TextStyle(color: Color(0xFF64748B)),
+                  ),
+                ),
+              )
+            else
+              ..._categories.asMap().entries.map((entry) => _buildCategoryNode(entry.value, entry.key)),
+
+            const SizedBox(height: 110), // Padding for floating menu bar
           ],
-        ),
-        const SizedBox(height: 16),
-
-        // Multi-Bank Card Carousel with Add (+) Button (Matching Image 3)
-        _buildBankCardCarousel(),
-        const SizedBox(height: 16),
-
-        if (_rawCategories.isNotEmpty || _categories.isNotEmpty) ...[
-          _buildCategoryPieChartCard(),
-          const SizedBox(height: 16),
-        ],
-
-        if (_categories.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Center(
-              child: Text(
-                LanguageService.tr(
-                  'No categories found for this selection.',
-                  'لا توجد فئات تحتوي على عمليات لهذا الاختيار.',
-                ),
-                style: const TextStyle(color: Color(0xFF64748B)),
-              ),
-            ),
-          )
-        else
-          ..._categories.asMap().entries.map((entry) => _buildCategoryNode(entry.value, entry.key)),
-
-        const SizedBox(height: 110), // Padding for floating menu bar
-      ],
+        );
+      },
     );
   }
 
@@ -4608,6 +4721,26 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     final isExpanded = _expandedCategoryIds.contains(node.id);
     final isSelectedFromChart = index != null && _selectedCategoryIndex == index;
 
+    // Budget reflection: P1_BaseBaisa (configured budget) vs P1_FinalSpentBaisa (node.totalAmount)
+    final isIncomeOrTransfer = node.name.toLowerCase() == 'income' ||
+        node.name.toLowerCase() == 'transfers';
+    final bool hasCategoryBudget = !isIncomeOrTransfer &&
+        _budgetController.hasBudgetForCategory(node.name);
+    final double baseBudgetOmr = hasCategoryBudget
+        ? _budgetController.budgetForCategory(node.name)
+        : 0.0;
+    final double spentOmr = node.totalAmount;
+    final int baseBaisa = (baseBudgetOmr * 1000).round();
+    final int spentBaisa = (spentOmr * 1000).round();
+    final int remainingBaisa = baseBaisa - spentBaisa;
+    final double remainingOmr = remainingBaisa / 1000.0;
+    final bool isOverBudget = hasCategoryBudget && remainingBaisa < 0;
+    final double spendRatio = hasCategoryBudget && baseBudgetOmr > 0
+        ? (spentOmr / baseBudgetOmr).clamp(0.0, 1.0)
+        : 0.0;
+    final bool isWarningOrOver =
+        hasCategoryBudget && (spentOmr / baseBudgetOmr) > 0.85;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -4650,38 +4783,100 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
             borderRadius: BorderRadius.circular(14),
             child: Padding(
               padding: const EdgeInsets.all(14),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _build4DCategoryIcon(node, catColor),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      _localizedCategoryName(node.name),
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  Row(
                     children: [
-                      Text(
-                        '${node.totalAmount.toStringAsFixed(3)} ${LanguageService.tr('OMR', 'ر.ع')}',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: node.totalAmount > 0 ? catColor : const Color(0xFF64748B)),
+                      _build4DCategoryIcon(node, catColor),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          _localizedCategoryName(node.name),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        node.txnCount > 0
-                            ? (LanguageService.isArabic ? '${node.txnCount} عملية' : '${node.txnCount} txns')
-                            : LanguageService.tr('No txns', 'لا توجد عمليات'),
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '${node.totalAmount.toStringAsFixed(3)} ${LanguageService.tr('OMR', 'ر.ع')}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: node.totalAmount > 0
+                                  ? catColor
+                                  : const Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            node.txnCount > 0
+                                ? (LanguageService.isArabic
+                                    ? '${node.txnCount} عملية'
+                                    : '${node.txnCount} txns')
+                                : LanguageService.tr('No txns', 'لا توجد عمليات'),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 20,
+                        color: const Color(0xFF64748B),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20,
-                    color: const Color(0xFF64748B),
-                  ),
+                  if (hasCategoryBudget) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isOverBudget
+                              ? '${remainingOmr.abs().toStringAsFixed(3)} ${LanguageService.tr('OMR over budget', 'ر.ع تجاوز الميزانية')} (${baseBudgetOmr.toStringAsFixed(3)} ${LanguageService.tr('OMR budget', 'ر.ع ميزانية')})'
+                              : '${remainingOmr.toStringAsFixed(3)} ${LanguageService.tr('OMR left of', 'ر.ع متبقي من')} ${baseBudgetOmr.toStringAsFixed(3)} ${LanguageService.tr('OMR', 'ر.ع')}',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isWarningOrOver
+                                ? AppColors.pink
+                                : AppColors.mint,
+                          ),
+                        ),
+                        Text(
+                          '${((spentOmr / baseBudgetOmr) * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isWarningOrOver
+                                ? AppColors.pink
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: spendRatio,
+                        minHeight: 6,
+                        backgroundColor: AppColors.divider,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isWarningOrOver ? AppColors.pink : AppColors.mint,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

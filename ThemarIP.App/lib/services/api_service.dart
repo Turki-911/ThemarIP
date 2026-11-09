@@ -520,6 +520,58 @@ class ApiService {
     }
     return error.toString();
   }
+
+  // 8. Budgeting Endpoints (/api/budgeting)
+  Future<Map<String, dynamic>> getBudgetOverview({
+    String? userId,
+    String? email,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/budgeting/overview',
+        queryParameters: {
+          if (userId != null && userId.isNotEmpty) 'userId': userId,
+          if (email != null && email.isNotEmpty) 'email': email,
+        },
+      );
+      if (response.data is Map<String, dynamic>) {
+        return response.data as Map<String, dynamic>;
+      }
+      return {};
+    } catch (e) {
+      // Return empty so caller falls back gracefully
+      return {};
+    }
+  }
+
+  Future<Map<String, dynamic>> saveBudgetSetup({
+    String? userId,
+    String? email,
+    required double monthlyTotalOmr,
+    required bool rollover,
+    required Map<String, double> categoryBudgetsOmr,
+    int periodStartDay = 1,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/budgeting/setup',
+        data: {
+          if (userId != null && userId.isNotEmpty) 'userId': userId,
+          if (email != null && email.isNotEmpty) 'email': email,
+          'monthlyTotalOmr': monthlyTotalOmr,
+          'periodStartDay': periodStartDay,
+          'rollover': rollover,
+          'categoryBudgetsOmr': categoryBudgetsOmr,
+        },
+      );
+      if (response.data is Map<String, dynamic>) {
+        return response.data as Map<String, dynamic>;
+      }
+      return {};
+    } catch (e) {
+      rethrow;
+    }
+  }
 }
 
 class ApiHealthResult {

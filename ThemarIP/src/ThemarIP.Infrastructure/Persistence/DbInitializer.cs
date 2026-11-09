@@ -490,5 +490,104 @@ public static class DbInitializer
             context.BankMessageParserRules.AddRange(parserRules);
             await context.SaveChangesAsync();
         }
+
+        // Ensure Budgeting schema & views exist (idempotent)
+        await EnsureBudgetingSchemaAsync(context);
+    }
+
+    private static async Task EnsureBudgetingSchemaAsync(ApplicationDbContext context)
+    {
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"
+                CREATE TABLE IF NOT EXISTS ""budget_settings"" (
+                    ""Id"" TEXT NOT NULL CONSTRAINT ""PK_budget_settings"" PRIMARY KEY,
+                    ""UserId"" TEXT NOT NULL,
+                    ""TotalMonthlyBudget"" BIGINT NOT NULL DEFAULT 0,
+                    ""PeriodStartDay"" INTEGER NOT NULL DEFAULT 1,
+                    ""RolloverEnabled"" INTEGER NOT NULL DEFAULT 1,
+                    ""Currency"" TEXT NOT NULL DEFAULT 'OMR',
+                    ""CreatedAt"" TEXT NOT NULL,
+                    ""UpdatedAt"" TEXT NOT NULL,
+                    CONSTRAINT ""FK_budget_settings_Users_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE,
+                    CONSTRAINT ""CK_budget_settings_TotalMonthlyBudget"" CHECK (""TotalMonthlyBudget"" >= 0),
+                    CONSTRAINT ""CK_budget_settings_PeriodStartDay"" CHECK (""PeriodStartDay"" BETWEEN 1 AND 28),
+                    CONSTRAINT ""CK_budget_settings_RolloverEnabled"" CHECK (""RolloverEnabled"" IN (0, 1))
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""UX_budget_settings_UserId"" ON ""budget_settings"" (""UserId"");
+
+                CREATE TABLE IF NOT EXISTS ""budget_categories"" (
+                    ""Id"" TEXT NOT NULL CONSTRAINT ""PK_budget_categories"" PRIMARY KEY,
+                    ""UserId"" TEXT NOT NULL,
+                    ""CategoryId"" TEXT NOT NULL,
+                    ""BudgetAmount"" BIGINT NOT NULL,
+                    ""EffectiveFrom"" TEXT NOT NULL,
+                    ""EffectiveTo"" TEXT NULL,
+                    ""CreatedAt"" TEXT NOT NULL,
+                    ""UpdatedAt"" TEXT NOT NULL,
+                    CONSTRAINT ""FK_budget_categories_Users_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE,
+                    CONSTRAINT ""FK_budget_categories_PfmCategories_CategoryId"" FOREIGN KEY (""CategoryId"") REFERENCES ""PfmCategories"" (""Id"") ON DELETE RESTRICT,
+                    CONSTRAINT ""CK_budget_categories_BudgetAmount"" CHECK (""BudgetAmount"" >= 0),
+                    CONSTRAINT ""CK_budget_categories_EffectiveRange"" CHECK (""EffectiveTo"" IS NULL OR ""EffectiveTo"" >= ""EffectiveFrom"")
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""UX_budget_categories_Active"" ON ""budget_categories"" (""UserId"", ""CategoryId"") WHERE ""EffectiveTo"" IS NULL;
+                CREATE UNIQUE INDEX IF NOT EXISTS ""UX_budget_categories_User_Cat_From"" ON ""budget_categories"" (""UserId"", ""CategoryId"", ""EffectiveFrom"");
+                CREATE INDEX IF NOT EXISTS ""IX_budget_categories_CategoryId"" ON ""budget_categories"" (""CategoryId"");
+
+                CREATE TABLE IF NOT EXISTS ""budget_excluded_categories"" (
+                    ""Id"" TEXT NOT NULL CONSTRAINT ""PK_budget_excluded_categories"" PRIMARY KEY,
+                    ""UserId"" TEXT NOT NULL,
+                    ""CategoryId"" TEXT NOT NULL,
+                    ""CreatedAt"" TEXT NOT NULL,
+                    ""UpdatedAt"" TEXT NOT NULL,
+                    CONSTRAINT ""FK_budget_excluded_categories_Users_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE,
+                    CONSTRAINT ""FK_budget_excluded_categories_PfmCategories_CategoryId"" FOREIGN KEY (""CategoryId"") REFERENCES ""PfmCategories"" (""Id"") ON DELETE CASCADE
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""UX_budget_excluded_categories_User_Cat"" ON ""budget_excluded_categories"" (""UserId"", ""CategoryId"");
+
+                CREATE TABLE IF NOT EXISTS ""budget_periods"" (
+                    ""Id"" TEXT NOT NULL CONSTRAINT ""PK_budget_periods"" PRIMARY KEY,
+                    ""UserId"" TEXT NOT NULL,
+                    ""PeriodStart"" TEXT NOT NULL,
+                    ""PeriodEnd"" TEXT NOT NULL,
+                    ""BaseTotal"" BIGINT NOT NULL DEFAULT 0,
+                    ""RolledAmount"" BIGINT NOT NULL DEFAULT 0,
+                    ""SpentTotalSnapshot"" BIGINT NULL,
+                    ""CommittedTotalSnapshot"" BIGINT NULL,
+                    ""Status"" TEXT NOT NULL DEFAULT 'open',
+                    ""ClosedAt"" TEXT NULL,
+                    ""CreatedAt"" TEXT NOT NULL,
+                    ""UpdatedAt"" TEXT NOT NULL,
+                    CONSTRAINT ""FK_budget_periods_Users_UserId"" FOREIGN KEY (""UserId"") REFERENCES ""Users"" (""Id"") ON DELETE CASCADE,
+                    CONSTRAINT ""CK_budget_periods_BaseTotal"" CHECK (""BaseTotal"" >= 0),
+                    CONSTRAINT ""CK_budget_periods_PeriodOrder"" CHECK (""PeriodEnd"" > ""PeriodStart""),
+                    CONSTRAINT ""CK_budget_periods_Status"" CHECK (""Status"" IN ('open', 'closed'))
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""UX_budget_periods_User_Start"" ON ""budget_periods"" (""UserId"", ""PeriodStart"");
+                CREATE UNIQUE INDEX IF NOT EXISTS ""UX_budget_periods_OneOpenPerUser"" ON ""budget_periods"" (""UserId"") WHERE ""Status"" = 'open';
+                CREATE INDEX IF NOT EXISTS ""IX_budget_periods_User_Dates"" ON ""budget_periods"" (""UserId"", ""PeriodStart"", ""PeriodEnd"");
+
+                CREATE TABLE IF NOT EXISTS ""budget_period_categories"" (
+                    ""Id"" TEXT NOT NULL CONSTRAINT ""PK_budget_period_categories"" PRIMARY KEY,
+                    ""BudgetPeriodId"" TEXT NOT NULL,
+                    ""CategoryId"" TEXT NOT NULL,
+                    ""BaseAmount"" BIGINT NOT NULL DEFAULT 0,
+                    ""RolledAmount"" BIGINT NOT NULL DEFAULT 0,
+                    ""SpentAmount"" BIGINT NULL,
+                    ""CreatedAt"" TEXT NOT NULL,
+                    ""UpdatedAt"" TEXT NOT NULL,
+                    CONSTRAINT ""FK_budget_period_categories_budget_periods_BudgetPeriodId"" FOREIGN KEY (""BudgetPeriodId"") REFERENCES ""budget_periods"" (""Id"") ON DELETE CASCADE,
+                    CONSTRAINT ""FK_budget_period_categories_PfmCategories_CategoryId"" FOREIGN KEY (""CategoryId"") REFERENCES ""PfmCategories"" (""Id"") ON DELETE RESTRICT,
+                    CONSTRAINT ""CK_budget_period_categories_BaseAmount"" CHECK (""BaseAmount"" >= 0),
+                    CONSTRAINT ""CK_budget_period_categories_SpentAmount"" CHECK (""SpentAmount"" IS NULL OR ""SpentAmount"" >= 0)
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""UX_budget_period_categories_Period_Cat"" ON ""budget_period_categories"" (""BudgetPeriodId"", ""CategoryId"");
+                CREATE INDEX IF NOT EXISTS ""IX_budget_period_categories_CategoryId"" ON ""budget_period_categories"" (""CategoryId"");
+            ");
+        }
+        catch
+        {
+            // Ignore if already initialized
+        }
     }
 }

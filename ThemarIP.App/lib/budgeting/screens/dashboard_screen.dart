@@ -19,11 +19,13 @@ import '../widgets/budget_widgets.dart';
 class DashboardScreen extends StatelessWidget {
   final BudgetController controller;
   final VoidCallback onEditCategories;
+  final VoidCallback? onBack;
 
   const DashboardScreen({
     super.key,
     required this.controller,
     required this.onEditCategories,
+    this.onBack,
   });
 
   @override
@@ -37,7 +39,7 @@ class DashboardScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             BudgetWizardHeader(
-              onBack: onEditCategories,
+              onBack: onBack ?? onEditCategories,
               centerTitle: BudgetConstants.dashboardTitle,
               trailingLabel: BudgetConstants.editLabel,
               onTrailingTap: onEditCategories,

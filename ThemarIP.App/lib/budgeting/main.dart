@@ -114,7 +114,17 @@ class _BudgetingFlowViewState extends State<BudgetingFlowView> {
         return CategoryBudgetsScreen(
           key: const ValueKey('budget_step_1'),
           controller: _controller,
-          onBack: () => _controller.setStep(0),
+          onBack: () {
+            if (_controller.isBudgetActive) {
+              if (widget.onExitToHierarchy != null) {
+                widget.onExitToHierarchy!();
+              } else {
+                _controller.setStep(4);
+              }
+            } else {
+              _controller.setStep(0);
+            }
+          },
           onContinue: () => _controller.setStep(2),
         );
       case 2:
@@ -139,6 +149,7 @@ class _BudgetingFlowViewState extends State<BudgetingFlowView> {
         return DashboardScreen(
           key: const ValueKey('budget_step_4'),
           controller: _controller,
+          onBack: widget.onExitToHierarchy,
           onEditCategories: () => _controller.setStep(1),
         );
     }

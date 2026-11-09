@@ -3948,7 +3948,12 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
             if (_rawCategories.isNotEmpty || _categories.isNotEmpty) ...[
               _buildCategoryPieChartCard(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+            ],
+
+            if (_categories.isNotEmpty) ...[
+              _buildCategoriesSectionHeader(),
+              const SizedBox(height: 12),
             ],
 
             if (_categories.isEmpty)
@@ -3976,6 +3981,68 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           ],
         );
       },
+    );
+  }
+
+  // ============================================================
+  // CATEGORIES SECTION HEADER (WITH QUICK "MANAGE ▶" BUDGET ACCESS)
+  // ============================================================
+  Widget _buildCategoriesSectionHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            LanguageService.tr('Categories', 'الفئات'),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.2,
+            ),
+          ),
+          InkWell(
+            onTap: () {
+              setState(() {
+                _selectedPageIndex = 3;
+                if (_budgetController.isBudgetActive && _budgetController.monthlyTotal > 0) {
+                  _budgetController.setStep(1); // Quick access to adjust category budgets
+                } else {
+                  _budgetController.setStep(0); // Setup monthly budget
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    LanguageService.tr('Manage', 'إدارة'),
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF7B2FF7),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Transform.flip(
+                    flipX: LanguageService.isArabic,
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      size: 15,
+                      color: Color(0xFF7B2FF7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

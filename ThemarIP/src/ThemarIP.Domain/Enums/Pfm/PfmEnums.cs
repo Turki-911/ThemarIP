@@ -118,7 +118,8 @@ public enum IntelligenceRuleType
     LowBalance,
     SpendingIncrease,
     Recurring,
-    Custom
+    Custom,
+    BudgetThreshold
 }
 
 public enum IntelligenceRuleStatus

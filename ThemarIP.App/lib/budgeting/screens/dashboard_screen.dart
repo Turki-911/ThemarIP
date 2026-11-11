@@ -78,6 +78,31 @@ class DashboardScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      onPressed: () {
+                        controller.setStep(1);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.primaryPurple,
+                        side: const BorderSide(
+                          color: AppColors.primaryPurple,
+                          width: 1.2,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      child: const Text(
+                        'Re-setup budget',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

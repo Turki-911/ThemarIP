@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 class AppColors {
   const AppColors._();
 
-  static const Color scaffoldBackground = Color(0xFFEEEDF7);
+  static const Color scaffoldBackground = Color(0xFFFFFFFF);
   static const Color cardBackground = Color(0xFFFFFFFF);
   static const Color ink = Color(0xFF1B1633);
   static const Color mutedText = Color(0xFF76729A);

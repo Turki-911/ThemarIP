@@ -147,7 +147,7 @@ class _StepProgressDots extends StatelessWidget {
             decoration: BoxDecoration(
               color: isCompletedOrCurrent
                   ? AppColors.primaryPurple
-                  : AppColors.divider,
+                  : const Color(0xFFEDEBF7),
               borderRadius: BorderRadius.circular(2),
             ),
           );
@@ -157,7 +157,7 @@ class _StepProgressDots extends StatelessWidget {
   }
 }
 
-/// White rounded card with 20px corners and zero elevation.
+/// White rounded card with 20px corners, subtle border and soft elevation.
 class BudgetSurfaceCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -178,6 +178,14 @@ class BudgetSurfaceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: child,
     );

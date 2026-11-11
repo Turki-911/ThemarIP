@@ -7,7 +7,6 @@ import 'screens/monthly_total_screen.dart';
 import 'screens/rollover_screen.dart';
 import 'state/budget_controller.dart';
 import 'theme/app_theme.dart';
-import 'widgets/budget_widgets.dart';
 
 /// Standalone entrypoint so `flutter run -t lib/budgeting/main.dart` can launch
 /// the 5-screen Budgeting experience directly, while `BudgetingFlowView` embeds
@@ -115,15 +114,8 @@ class _BudgetingFlowViewState extends State<BudgetingFlowView> {
           key: const ValueKey('budget_step_1'),
           controller: _controller,
           onBack: () {
-            if (_controller.isBudgetActive) {
-              if (widget.onExitToHierarchy != null) {
-                widget.onExitToHierarchy!();
-              } else {
-                _controller.setStep(4);
-              }
-            } else {
-              _controller.setStep(0);
-            }
+            // Allow user to go back to Step 0 to re-setup total monthly budget
+            _controller.setStep(0);
           },
           onContinue: () => _controller.setStep(2),
         );

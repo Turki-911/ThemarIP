@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ThemarIP.Application.DTOs.Statements;
 using ThemarIP.Application.Interfaces.Statements;
 
@@ -861,6 +862,10 @@ public class StatementsController : ControllerBase
             status = r.Status.ToString().ToLowerInvariant(),
             alertSeverity = "Medium",
             cooldownHours = 24,
+            fireCount = r.FireCount,
+            lastFiredAt = r.LastFiredAt,
+            icon = r.Icon,
+            iconColor = r.IconColor,
             @params = r.Params.Select(p => new
             {
                 id = p.Id.ToString(),
@@ -896,7 +901,7 @@ public class StatementsController : ControllerBase
     public async Task<IActionResult> UpdateIntelligenceRule(
         [FromRoute] Guid id,
         [FromBody] System.Text.Json.JsonElement body,
-        [FromServices] ThemarIP.Application.Common.Interfaces.IApplicationDbContext context)
+        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
     {
         var rules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
             Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
@@ -914,6 +919,14 @@ public class StatementsController : ControllerBase
         if (body.TryGetProperty("insightTemplate", out var templateElem))
         {
             rule.InsightTemplate = templateElem.GetString() ?? rule.InsightTemplate;
+        }
+        if (body.TryGetProperty("icon", out var iconElem))
+        {
+            rule.Icon = iconElem.GetString() ?? rule.Icon;
+        }
+        if (body.TryGetProperty("iconColor", out var iconColorElem))
+        {
+            rule.IconColor = iconColorElem.GetString() ?? rule.IconColor;
         }
         if (body.TryGetProperty("status", out var statusElem))
         {
@@ -933,12 +946,371 @@ public class StatementsController : ControllerBase
                     p.ParamValue = prop.Value.ToString();
                     p.UpdatedAt = DateTimeOffset.UtcNow;
                 }
+                else
+                {
+                    rule.Params.Add(new ThemarIP.Domain.Entities.Pfm.PfmIntelligenceRuleParam
+                    {
+                        Id = Guid.NewGuid(),
+                        RuleId = rule.Id,
+                        ParamKey = prop.Name,
+                        ParamValue = prop.Value.ToString(),
+                        ParamType = ThemarIP.Domain.Enums.Pfm.IntelligenceRuleParamType.String,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    });
+                }
             }
         }
 
         rule.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(default);
         return Ok(new { success = true, message = "Intelligence rule updated in themarip.db." });
+    }
+
+    [HttpPost("intelligence-rules")]
+    public async Task<IActionResult> CreateIntelligenceRule(
+        [FromBody] System.Text.Json.JsonElement body,
+        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
+    {
+        var name = body.TryGetProperty("name", out var n) ? n.GetString() : null;
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { message = "Rule name is required." });
+
+        var typeStr = body.TryGetProperty("type", out var t) ? t.GetString() : "BudgetThreshold";
+        if (!Enum.TryParse<ThemarIP.Domain.Enums.Pfm.IntelligenceRuleType>(typeStr, true, out var ruleType))
+        {
+            ruleType = ThemarIP.Domain.Enums.Pfm.IntelligenceRuleType.BudgetThreshold;
+        }
+
+        var template = body.TryGetProperty("insightTemplate", out var tmpl) ? tmpl.GetString() : string.Empty;
+        var icon = body.TryGetProperty("icon", out var ic) ? ic.GetString() : "bell";
+        var iconColor = body.TryGetProperty("iconColor", out var col) ? col.GetString() : "#8B5CF6";
+        var statusStr = body.TryGetProperty("status", out var st) ? st.GetString() : "active";
+
+        var rule = new ThemarIP.Domain.Entities.Pfm.PfmIntelligenceRule
+        {
+            Id = Guid.NewGuid(),
+            Name = name.Trim(),
+            RuleType = ruleType,
+            Status = string.Equals(statusStr, "active", StringComparison.OrdinalIgnoreCase)
+                ? ThemarIP.Domain.Enums.Pfm.IntelligenceRuleStatus.Active
+                : ThemarIP.Domain.Enums.Pfm.IntelligenceRuleStatus.Inactive,
+            InsightTemplate = template ?? string.Empty,
+            Icon = string.IsNullOrWhiteSpace(icon) ? "bell" : icon,
+            IconColor = string.IsNullOrWhiteSpace(iconColor) ? "#8B5CF6" : iconColor,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        if (body.TryGetProperty("params", out var paramsElem) && paramsElem.ValueKind == System.Text.Json.JsonValueKind.Object)
+        {
+            foreach (var prop in paramsElem.EnumerateObject())
+            {
+                rule.Params.Add(new ThemarIP.Domain.Entities.Pfm.PfmIntelligenceRuleParam
+                {
+                    Id = Guid.NewGuid(),
+                    RuleId = rule.Id,
+                    ParamKey = prop.Name,
+                    ParamValue = prop.Value.ToString(),
+                    ParamType = ThemarIP.Domain.Enums.Pfm.IntelligenceRuleParamType.String,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                });
+            }
+        }
+        else
+        {
+            // Default params for budget threshold rule
+            rule.Params.Add(new ThemarIP.Domain.Entities.Pfm.PfmIntelligenceRuleParam
+            {
+                Id = Guid.NewGuid(),
+                RuleId = rule.Id,
+                ParamKey = "thresholdPercent",
+                ParamValue = "50",
+                ParamType = ThemarIP.Domain.Enums.Pfm.IntelligenceRuleParamType.Number
+            });
+            rule.Params.Add(new ThemarIP.Domain.Entities.Pfm.PfmIntelligenceRuleParam
+            {
+                Id = Guid.NewGuid(),
+                RuleId = rule.Id,
+                ParamKey = "channel",
+                ParamValue = "Push Notification",
+                ParamType = ThemarIP.Domain.Enums.Pfm.IntelligenceRuleParamType.String
+            });
+            rule.Params.Add(new ThemarIP.Domain.Entities.Pfm.PfmIntelligenceRuleParam
+            {
+                Id = Guid.NewGuid(),
+                RuleId = rule.Id,
+                ParamKey = "period",
+                ParamValue = "monthly",
+                ParamType = ThemarIP.Domain.Enums.Pfm.IntelligenceRuleParamType.String
+            });
+        }
+
+        context.PfmIntelligenceRules.Add(rule);
+        await context.SaveChangesAsync(default);
+
+        return Ok(new
+        {
+            id = rule.Id.ToString(),
+            type = rule.RuleType.ToString(),
+            name = rule.Name,
+            description = rule.InsightTemplate,
+            status = rule.Status.ToString().ToLowerInvariant(),
+            icon = rule.Icon,
+            iconColor = rule.IconColor,
+            fireCount = rule.FireCount,
+            @params = rule.Params.Select(p => new { paramKey = p.ParamKey, paramValue = p.ParamValue }).ToList()
+        });
+    }
+
+    [HttpDelete("intelligence-rules/{id}")]
+    public async Task<IActionResult> DeleteIntelligenceRule(
+        [FromRoute] Guid id,
+        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
+    {
+        var rule = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                    context.PfmIntelligenceRules,
+                    r => r.Params
+                ),
+                r => r.Alerts
+            ),
+            r => r.Id == id
+        );
+        if (rule == null) return NotFound(new { message = "Intelligence rule not found." });
+
+        context.PfmIntelligenceRuleParams.RemoveRange(rule.Params);
+        context.PfmIntelligenceAlerts.RemoveRange(rule.Alerts);
+        context.PfmIntelligenceRules.Remove(rule);
+        await context.SaveChangesAsync(default);
+
+        return Ok(new { success = true, message = "Intelligence rule deleted successfully." });
+    }
+
+    [HttpPost("intelligence-rules/evaluate")]
+    public async Task<IActionResult> EvaluateIntelligenceRules(
+        [FromBody] System.Text.Json.JsonElement? body,
+        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
+    {
+        Guid? filterRuleId = null;
+        if (body.HasValue && body.Value.TryGetProperty("ruleId", out var rIdElem))
+        {
+            if (Guid.TryParse(rIdElem.GetString(), out var parsedRId)) filterRuleId = parsedRId;
+        }
+
+        bool force = false;
+        if (body.HasValue && body.Value.TryGetProperty("force", out var forceElem))
+        {
+            force = forceElem.GetBoolean();
+        }
+
+        // 1. Fetch active BudgetThreshold rules
+        var allRules = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+                context.PfmIntelligenceRules,
+                r => r.Params
+            )
+        );
+
+        var budgetRules = allRules
+            .Where(r => r.Status == ThemarIP.Domain.Enums.Pfm.IntelligenceRuleStatus.Active &&
+                        r.RuleType == ThemarIP.Domain.Enums.Pfm.IntelligenceRuleType.BudgetThreshold &&
+                        (!filterRuleId.HasValue || r.Id == filterRuleId.Value))
+            .ToList();
+
+        if (budgetRules.Count == 0)
+        {
+            return Ok(new
+            {
+                success = true,
+                evaluatedRules = 0,
+                notificationsTriggered = 0,
+                message = "No active budget threshold rules found to evaluate.",
+                notifications = new object[] { }
+            });
+        }
+
+        // 2. Query open budget periods from vw_budget_period_overview
+        var conn = context.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+        {
+            await conn.OpenAsync();
+        }
+
+        var periodRows = new List<(string BudgetPeriodId, string UserId, string FullName, string Email, string Currency, long EffectiveTotal, long NormalSpent, long RemainingTotal, string PeriodStart, string PeriodEnd)>();
+
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+                SELECT 
+                    o.BudgetPeriodId,
+                    o.UserId,
+                    COALESCE(u.FullName, 'Demo User') AS FullName,
+                    COALESCE(u.Email, 'user@themarip.com') AS Email,
+                    o.Currency,
+                    o.EffectiveTotalBudgetBaisa,
+                    o.NormalSpentBaisa,
+                    o.RemainingTotalBaisa,
+                    o.PeriodStart,
+                    o.PeriodEnd
+                FROM vw_budget_period_overview o
+                LEFT JOIN Users u ON lower(u.Id) = lower(o.UserId)
+                WHERE o.Status = 'open' AND o.EffectiveTotalBudgetBaisa > 0;";
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                periodRows.Add((
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    Convert.ToInt64(reader.GetValue(5)),
+                    Convert.ToInt64(reader.GetValue(6)),
+                    Convert.ToInt64(reader.GetValue(7)),
+                    reader.GetString(8),
+                    reader.GetString(9)
+                ));
+            }
+        }
+
+        var dispatchedNotifications = new List<object>();
+        var cooldownCutoff = DateTimeOffset.UtcNow.AddHours(-12);
+
+        // Fetch recent alerts for deduplication
+        var recentAlerts = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+            context.PfmIntelligenceAlerts.Where(a => a.TriggeredAt > cooldownCutoff)
+        );
+
+        foreach (var rule in budgetRules)
+        {
+            // Parse threshold percent
+            var threshParam = rule.Params.FirstOrDefault(p => string.Equals(p.ParamKey, "thresholdPercent", StringComparison.OrdinalIgnoreCase)
+                                                            || string.Equals(p.ParamKey, "threshold", StringComparison.OrdinalIgnoreCase));
+            double thresholdPercent = 50.0;
+            if (threshParam != null && double.TryParse(threshParam.ParamValue, out var parsedThresh))
+            {
+                thresholdPercent = parsedThresh;
+            }
+
+            foreach (var bp in periodRows)
+            {
+                if (!Guid.TryParse(bp.UserId, out var userGuid)) continue;
+
+                double spendPct = bp.EffectiveTotal > 0
+                    ? (bp.NormalSpent / (double)bp.EffectiveTotal) * 100.0
+                    : 0.0;
+
+                if (spendPct >= thresholdPercent)
+                {
+                    // Check deduplication
+                    if (!force && recentAlerts.Any(a => a.RuleId == rule.Id && a.UserId == userGuid))
+                    {
+                        continue; // already fired recently
+                    }
+
+                    // Resolve template
+                    string template = string.IsNullOrWhiteSpace(rule.InsightTemplate)
+                        ? "You have reached {thresholdPercent}% of your monthly budget ({spentAmount} of {totalBudget} {currency})."
+                        : rule.InsightTemplate;
+
+                    var spentAmountStr = (bp.NormalSpent / 1000.0).ToString("N3", System.Globalization.CultureInfo.InvariantCulture);
+                    var totalBudgetStr = (bp.EffectiveTotal / 1000.0).ToString("N3", System.Globalization.CultureInfo.InvariantCulture);
+                    var remainingAmountStr = (Math.Max(0, bp.RemainingTotal) / 1000.0).ToString("N3", System.Globalization.CultureInfo.InvariantCulture);
+
+                    var msg = template
+                        .Replace("{thresholdPercent}", thresholdPercent.ToString("0"))
+                        .Replace("{threshold}", thresholdPercent.ToString("0"))
+                        .Replace("{spentAmount}", spentAmountStr)
+                        .Replace("{totalBudget}", totalBudgetStr)
+                        .Replace("{remainingAmount}", remainingAmountStr)
+                        .Replace("{currency}", bp.Currency)
+                        .Replace("{userName}", bp.FullName)
+                        .Replace("{period}", "monthly");
+
+                    // Also replace any custom rule parameters in template
+                    foreach (var p in rule.Params)
+                    {
+                        msg = msg.Replace($"{{{p.ParamKey}}}", p.ParamValue);
+                    }
+
+                    var alert = new ThemarIP.Domain.Entities.Pfm.PfmIntelligenceAlert
+                    {
+                        Id = Guid.NewGuid(),
+                        RuleId = rule.Id,
+                        UserId = userGuid,
+                        AlertText = msg,
+                        TriggeredAt = DateTimeOffset.UtcNow,
+                        IsRead = false
+                    };
+
+                    context.PfmIntelligenceAlerts.Add(alert);
+                    rule.FireCount++;
+                    rule.LastFiredAt = DateTimeOffset.UtcNow;
+
+                    dispatchedNotifications.Add(new
+                    {
+                        alertId = alert.Id.ToString(),
+                        ruleId = rule.Id.ToString(),
+                        ruleName = rule.Name,
+                        userId = bp.UserId,
+                        userName = bp.FullName,
+                        userEmail = bp.Email,
+                        thresholdPercent = thresholdPercent,
+                        currentSpendPercent = Math.Round(spendPct, 1),
+                        spentAmount = spentAmountStr,
+                        totalBudget = totalBudgetStr,
+                        currency = bp.Currency,
+                        channel = "Push Notification",
+                        message = msg,
+                        deliveryStatus = "Delivered",
+                        triggeredAt = alert.TriggeredAt
+                    });
+                }
+            }
+        }
+
+        await context.SaveChangesAsync(default);
+
+        return Ok(new
+        {
+            success = true,
+            evaluatedRules = budgetRules.Count,
+            evaluatedUsers = periodRows.Count,
+            notificationsTriggered = dispatchedNotifications.Count,
+            notifications = dispatchedNotifications
+        });
+    }
+
+    [HttpGet("intelligence-rules/alerts")]
+    public async Task<IActionResult> GetIntelligenceAlerts(
+        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
+    {
+        var alerts = await context.PfmIntelligenceAlerts
+            .Include(a => a.Rule)
+            .Include(a => a.User)
+            .OrderByDescending(a => a.TriggeredAt)
+            .Take(50)
+            .ToListAsync();
+
+        var result = alerts.Select(a => new
+        {
+            id = a.Id.ToString(),
+            ruleId = a.RuleId.ToString(),
+            ruleName = a.Rule?.Name ?? "Budget Intelligence Rule",
+            ruleType = a.Rule?.RuleType.ToString() ?? "BudgetThreshold",
+            userId = a.UserId.ToString(),
+            userName = a.User?.FullName ?? "Demo User",
+            userEmail = a.User?.Email ?? "user@themarip.com",
+            message = a.AlertText,
+            channel = "Push Notification",
+            deliveryStatus = "Delivered",
+            isRead = a.IsRead,
+            triggeredAt = a.TriggeredAt
+        }).ToList();
+
+        return Ok(result);
     }
 
     [HttpGet("categories-hierarchy")]

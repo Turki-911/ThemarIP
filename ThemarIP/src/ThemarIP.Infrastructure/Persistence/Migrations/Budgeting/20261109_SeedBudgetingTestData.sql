@@ -43,7 +43,7 @@ INSERT OR IGNORE INTO "Users" (
     'Budgeting Demo User',
     '$2a$11$DemoPasswordHashForBudgetingSeedUser0000000000000000000',
     'User',
-    'Active',
+    'Approved',
     95,
     '2026-10-01T00:00:00+00:00'
 );

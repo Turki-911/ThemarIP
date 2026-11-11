@@ -34,6 +34,10 @@ public static class DbInitializer
                 UPDATE PfmTransactions
                 SET TransactionType = 'Credit'
                 WHERE Narration LIKE '%has been credited%' AND Narration NOT LIKE '%is debited%' AND TransactionType != 'Credit';
+
+                UPDATE Users
+                SET AccessStatus = 'Approved'
+                WHERE AccessStatus = 'Active';
             ");
         }
         catch

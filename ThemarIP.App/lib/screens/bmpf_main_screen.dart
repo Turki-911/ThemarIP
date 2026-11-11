@@ -13,6 +13,7 @@ import '../services/bank_setup_service.dart';
 import '../services/language_service.dart';
 import '../services/sms_service.dart';
 import '../budgeting/main.dart';
+import '../budgeting/models/budget_models.dart';
 import '../budgeting/state/budget_controller.dart';
 import '../budgeting/theme/app_theme.dart' show AppColors;
 
@@ -1367,7 +1368,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           textDirection: LanguageService.textDirection,
           child: Scaffold(
             backgroundColor: _selectedPageIndex == 3
-                ? AppColors.scaffoldBackground
+                ? Colors.white
                 : const Color(0xFFF8FAFC),
             appBar: _buildAppBar(),
             body: Stack(
@@ -1705,15 +1706,14 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   }
 
   // ============================================================
-  // FLOATING BOTTOM NAVIGATION BAR (HIERARCHY • BUDGETING • PROFILE)
+  // FLOATING BOTTOM NAVIGATION BAR (HIERARCHY • PROFILE)
   // ============================================================
   Widget _buildFloatingBottomNavBar() {
     final isHierarchy = _selectedPageIndex == 0;
-    final isBudgeting = _selectedPageIndex == 3;
     final isProfile = _selectedPageIndex == 1;
 
     return Container(
-      width: 264,
+      width: 196,
       height: 66,
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
@@ -1773,47 +1773,6 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                         color: isHierarchy
                             ? const Color(0xFF059669)
                             : (_hasUploadedStatement ? const Color(0xFF475569) : const Color(0xFF94A3B8)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-
-          // Budgeting Tab (Center — right next to Hierarchy)
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() => _selectedPageIndex = 3);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: isBudgeting
-                      ? AppColors.primaryPurple.withValues(alpha: 0.14)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(28),
-                  border: isBudgeting
-                      ? Border.all(color: AppColors.primaryPurple.withValues(alpha: 0.6))
-                      : null,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.pie_chart_outline_rounded,
-                      size: 20,
-                      color: isBudgeting ? AppColors.primaryPurple : const Color(0xFF475569),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      LanguageService.tr('Budgeting', 'الميزانية'),
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: isBudgeting ? FontWeight.bold : FontWeight.w600,
-                        color: isBudgeting ? AppColors.primaryPurple : const Color(0xFF475569),
                       ),
                     ),
                   ],
@@ -2073,6 +2032,10 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
             ],
           ),
         ),
+        const SizedBox(height: 18),
+
+        // Budgeting & Spending Targets (Moved from tool bar to Profile)
+        _buildProfileBudgetCard(),
         const SizedBox(height: 24),
 
         // Connected Banks Section
@@ -2463,6 +2426,149 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // ============================================================
+  // PROFILE BUDGETING CARD (ACCESS BUDGET FROM PROFILE)
+  // ============================================================
+  Widget _buildProfileBudgetCard() {
+    final hasBudget = _budgetController.hasConfiguredBudget;
+    final totalBudget = _budgetController.monthlyTotal;
+    final spentAmount = _budgetController.totalSpent;
+    final remainingAmount = _budgetController.remainingTotal;
+    final spendRatio = (totalBudget > 0 ? (spentAmount / totalBudget) : 0.0).clamp(0.0, 1.0);
+    final isWarning = totalBudget > 0 && (spentAmount / totalBudget) > 0.8;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryPurple.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.pie_chart_rounded,
+                  size: 22,
+                  color: AppColors.primaryPurple,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      LanguageService.tr('Budget & Spending Goals', 'الميزانية وأهداف الإنفاق'),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasBudget
+                          ? '${LanguageService.tr('Target', 'الهدف')}: ${BudgetConstants.formatOmr(totalBudget)} • ${LanguageService.tr('Spent', 'المصروف')}: ${BudgetConstants.formatOmr(spentAmount)}'
+                          : LanguageService.tr('Set monthly limits & track thresholds', 'تحديد أهداف الميزانية الشهرية والتحكم بها'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (hasBudget) ...[
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${(spendRatio * 100).toStringAsFixed(0)}% ${LanguageService.tr('used', 'مستخدمة')}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isWarning ? AppColors.pink : AppColors.mint,
+                  ),
+                ),
+                Text(
+                  '${BudgetConstants.formatOmr(remainingAmount)} ${LanguageService.tr('remaining', 'متبقي')}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: spendRatio,
+                minHeight: 6,
+                backgroundColor: const Color(0xFFF1F5F9),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isWarning ? AppColors.pink : AppColors.mint,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  if (_budgetController.monthlyTotal <= 0) {
+                    _budgetController.setMonthlyTotal(200.0);
+                  }
+                  _budgetController.setStep(hasBudget ? 1 : 0);
+                  _selectedPageIndex = 3;
+                });
+              },
+              icon: const Icon(Icons.tune_rounded, size: 16),
+              label: Text(
+                hasBudget
+                    ? LanguageService.tr('Manage & Re-setup Budget', 'إدارة الميزانية وإعادة الضبط')
+                    : LanguageService.tr('Set Up Budgeting', 'إعداد الميزانية'),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryPurple,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3961,7 +4067,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Center(
@@ -3975,7 +4081,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                 ),
               )
             else
-              ..._categories.asMap().entries.map((entry) => _buildCategoryNode(entry.value, entry.key)),
+              ..._categories.asMap().entries.map((entry) => _buildCategoryNode(entry.value, index: entry.key)),
 
             const SizedBox(height: 110), // Padding for floating menu bar
           ],
@@ -4006,12 +4112,11 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           InkWell(
             onTap: () {
               setState(() {
-                _selectedPageIndex = 3;
-                if (_budgetController.isBudgetActive && _budgetController.monthlyTotal > 0) {
-                  _budgetController.setStep(1); // Quick access to adjust category budgets
-                } else {
-                  _budgetController.setStep(0); // Setup monthly budget
+                if (_budgetController.monthlyTotal <= 0) {
+                  _budgetController.setMonthlyTotal(200.0);
                 }
+                _budgetController.setStep(1); // Set to Category Budgets Screen (Attachment 1)
+                _selectedPageIndex = 3;
               });
             },
             borderRadius: BorderRadius.circular(10),
@@ -4782,7 +4887,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     return map[key] ?? name;
   }
 
-  Widget _buildCategoryNode(BmpfCategoryNode node, [int? index]) {
+  Widget _buildCategoryNode(BmpfCategoryNode node, {int? index}) {
     final Color catColor = _resolveAdminCategoryColor(node);
 
     final isExpanded = _expandedCategoryIds.contains(node.id);

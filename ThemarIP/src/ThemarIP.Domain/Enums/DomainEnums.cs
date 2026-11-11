@@ -25,7 +25,8 @@ public enum AccessStatus
 {
     Pending,
     Approved,
-    Rejected
+    Rejected,
+    Active
 }
 
 public enum AccessReasonCode

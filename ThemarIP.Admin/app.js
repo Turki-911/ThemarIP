@@ -7,8 +7,7 @@
 
 // Dynamic API Base URL for local & production tunnel hosting
 const THEMAR_API_BASE = (() => {
-  if (typeof window === 'undefined') return 'https://themarip.up.railway.app/api';
-  if (window.location.hostname && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+  if (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http')) {
     return window.location.origin + '/api';
   }
   return 'https://themarip.up.railway.app/api';
@@ -182,6 +181,20 @@ const SEED = {
       insightTemplate:'You\'ve spent more than {threshold} {currency} on food delivery this month.',
       fireCount:9, lastFired:'2026-08-29',
       icon:'bike', iconColor:'#F97316'
+    },
+    {
+      id:'b0000001-0000-4000-8000-000000000050', name:'Budget 50% Threshold Reached', type:'budgetthreshold', status:'active',
+      params:{ thresholdPercent:50, channel:'Push Notification', period:'monthly', scope:'Overall' },
+      insightTemplate:'You have reached {thresholdPercent}% of your monthly budget ({spentAmount} of {totalBudget} {currency}).',
+      fireCount:0, lastFired:new Date().toISOString(),
+      icon:'pie-chart', iconColor:'#8B5CF6'
+    },
+    {
+      id:'b0000001-0000-4000-8000-000000000080', name:'Budget 80% Warning', type:'budgetthreshold', status:'active',
+      params:{ thresholdPercent:80, channel:'Push Notification', period:'monthly', scope:'Overall' },
+      insightTemplate:'Warning: You have used {thresholdPercent}% of your monthly budget. Only {remainingAmount} {currency} remaining.',
+      fireCount:0, lastFired:new Date().toISOString(),
+      icon:'bell', iconColor:'#EC4899'
     },
   ],
 
@@ -734,25 +747,51 @@ async function loadIntelligenceRulesFromDb() {
             const num = parseFloat(p.paramValue);
             paramsObj[p.paramKey] = isNaN(num) ? p.paramValue : num;
           });
+          const ruleType = (r.type || '').toLowerCase();
+          let icon = r.icon;
+          let iconColor = r.iconColor;
+
+          if (!icon) {
+            if (ruleType.includes('budget')) {
+              icon = 'pie-chart';
+              iconColor = '#8B5CF6';
+            } else if (ruleType.includes('spending')) {
+              icon = 'credit-card';
+              iconColor = '#F59E0B';
+            } else if (ruleType.includes('balance')) {
+              icon = 'alert-triangle';
+              iconColor = 'var(--accent-rose)';
+            } else if (ruleType.includes('recurring')) {
+              icon = 'repeat';
+              iconColor = '#3B82F6';
+            } else {
+              icon = 'zap';
+              iconColor = '#8B5CF6';
+            }
+          }
+
           return {
             id: r.id,
-            type: r.type.toLowerCase(),
+            type: ruleType,
             name: r.name,
             description: r.description,
             status: r.status,
-            alertSeverity: r.alertSeverity.toLowerCase(),
-            cooldownHours: r.cooldownHours,
+            alertSeverity: (r.alertSeverity || 'medium').toLowerCase(),
+            cooldownHours: r.cooldownHours || 24,
             params: paramsObj,
-            icon: r.type.toLowerCase().includes('spending') ? 'credit-card' : r.type.toLowerCase().includes('balance') ? 'alert-triangle' : 'refresh-cw',
-            iconColor: r.alertSeverity.toLowerCase() === 'high' ? 'var(--accent-rose)' : 'var(--accent-amber)',
-            fireCount: 0,
-            lastFired: new Date().toISOString(),
-            insightTemplate: r.description
+            icon: icon,
+            iconColor: iconColor || '#8B5CF6',
+            fireCount: typeof r.fireCount === 'number' ? r.fireCount : 0,
+            lastFired: r.lastFiredAt || new Date().toISOString(),
+            insightTemplate: r.description || ''
           };
         });
         console.log(`[Engine] Loaded ${state.intelligenceRules.length} IntelligenceRules from themarip.db`);
         if (typeof Intelligence !== 'undefined' && Intelligence.render) {
           Intelligence.render();
+          if (Intelligence.updateAlertsBadge) {
+            Intelligence.updateAlertsBadge();
+          }
         }
       }
     }
@@ -2499,67 +2538,124 @@ const Corrections = {
 const Intelligence = {
   render() {
     const grid = document.getElementById('intelligence-rules-grid');
-    grid.innerHTML = state.intelligenceRules.map(rule=>`
-      <div class="intel-rule-card ${rule.status==='inactive'?'intel-rule-inactive':''}">
+    if (!grid) return;
+
+    grid.innerHTML = state.intelligenceRules.map(rule => {
+      const isBudgetRule = rule.type === 'budgetthreshold' || rule.type === 'budget_threshold';
+      const channel = (rule.params && rule.params.channel) || (isBudgetRule ? 'Push Notification' : null);
+
+      return `
+      <div class="intel-rule-card ${rule.status === 'inactive' ? 'intel-rule-inactive' : ''}" style="${isBudgetRule ? 'border-color: rgba(139,92,246,0.3);' : ''}">
         <div class="intel-rule-header">
           <div style="display:flex;align-items:center;gap:10px;">
-            <div style="width:36px;height:36px;border-radius:8px;background:${rule.iconColor}22;display:flex;align-items:center;justify-content:center;">
-              <i data-lucide="${rule.icon}" style="width:18px;color:${rule.iconColor};"></i>
+            <div style="width:36px;height:36px;border-radius:8px;background:${rule.iconColor}22;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i data-lucide="${rule.icon || 'zap'}" style="width:18px;color:${rule.iconColor || '#8B5CF6'};"></i>
             </div>
             <div>
-              <div style="font-weight:600;font-size:14px;">${rule.name}</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-weight:600;font-size:14px;">${rule.name}</span>
+                ${channel ? `<span class="badge" style="background:rgba(139,92,246,0.18);color:#A78BFA;font-size:10px;font-weight:600;border:1px solid rgba(139,92,246,0.3);padding:2px 7px;border-radius:12px;display:inline-flex;align-items:center;gap:3px;"><i data-lucide="bell" style="width:10px;height:10px;"></i>${channel}</span>` : ''}
+              </div>
               <div style="font-size:11px;color:var(--text-dim);">${Intelligence._typeLabel(rule.type)}</div>
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="badge ${rule.status==='active'?'badge-active':'badge-inactive'}" style="font-size:10px;">${rule.status}</span>
-            <button class="btn btn-xs btn-ghost intel-toggle-btn" data-rule-id="${rule.id}" title="${rule.status==='active'?'Deactivate':'Activate'}">
-              <i data-lucide="${rule.status==='active'?'pause-circle':'play-circle'}" style="width:14px;color:${rule.status==='active'?'var(--accent-amber)':'var(--accent-emerald)'};"></i>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="badge ${rule.status === 'active' ? 'badge-active' : 'badge-inactive'}" style="font-size:10px;">${rule.status}</span>
+            <button class="btn btn-xs btn-ghost intel-toggle-btn" data-rule-id="${rule.id}" title="${rule.status === 'active' ? 'Deactivate' : 'Activate'}">
+              <i data-lucide="${rule.status === 'active' ? 'pause-circle' : 'play-circle'}" style="width:14px;color:${rule.status === 'active' ? 'var(--accent-amber)' : 'var(--accent-emerald)'};"></i>
             </button>
-            <button class="btn btn-xs btn-ghost intel-edit-btn" data-rule-id="${rule.id}" title="Edit Parameters">
+            <button class="btn btn-xs btn-ghost intel-edit-btn" data-rule-id="${rule.id}" title="Edit Parameters & Message Template">
               <i data-lucide="settings-2" style="width:14px;"></i>
             </button>
+            ${isBudgetRule ? `
+            <button class="btn btn-xs btn-ghost intel-eval-btn" data-rule-id="${rule.id}" title="Test & Evaluate Push Notification Now" style="color:#A78BFA;">
+              <i data-lucide="play" style="width:13px;"></i>
+            </button>` : ''}
+            ${rule.id && rule.id.length > 20 && rule.id.startsWith('b') ? '' : (rule.id && rule.id.length > 20 ? `
+            <button class="btn btn-xs btn-ghost intel-delete-btn" data-rule-id="${rule.id}" title="Delete Rule" style="color:var(--accent-rose);">
+              <i data-lucide="trash-2" style="width:13px;"></i>
+            </button>` : '')}
           </div>
         </div>
 
-        <div class="intel-insight-preview">"${Intelligence._renderPreview(rule)}"</div>
+        <div class="intel-insight-preview" style="${isBudgetRule ? 'border-left: 3px solid #8B5CF6;' : ''}">"${Intelligence._renderPreview(rule)}"</div>
 
         <div class="intel-rule-params">
           ${Intelligence._renderParams(rule)}
         </div>
 
         <div class="intel-rule-stats">
-          <div class="intel-stat"><i data-lucide="zap" style="width:12px;"></i> ${rule.fireCount} triggers</div>
+          <div class="intel-stat"><i data-lucide="zap" style="width:12px;"></i> ${rule.fireCount || 0} triggers</div>
           <div class="intel-stat"><i data-lucide="calendar" style="width:12px;"></i> Last: ${Utils.fmt.date(rule.lastFired)}</div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+
     refreshIcons();
 
-    grid.querySelectorAll('.intel-toggle-btn').forEach(btn=>btn.addEventListener('click', ()=>Intelligence.toggle(btn.dataset.ruleId)));
-    grid.querySelectorAll('.intel-edit-btn').forEach(btn=>btn.addEventListener('click', ()=>Intelligence.openModal(btn.dataset.ruleId)));
+    grid.querySelectorAll('.intel-toggle-btn').forEach(btn => btn.addEventListener('click', () => Intelligence.toggle(btn.dataset.ruleId)));
+    grid.querySelectorAll('.intel-edit-btn').forEach(btn => btn.addEventListener('click', () => Intelligence.openModal(btn.dataset.ruleId)));
+    grid.querySelectorAll('.intel-eval-btn').forEach(btn => btn.addEventListener('click', () => Intelligence.evaluateRule(btn.dataset.ruleId)));
+    grid.querySelectorAll('.intel-delete-btn').forEach(btn => btn.addEventListener('click', () => Intelligence.deleteRule(btn.dataset.ruleId)));
+
+    Intelligence.updateAlertsBadge();
   },
 
   _typeLabel(type) {
-    const labels = { high_spending:'High Spending Alert', unusual_spending:'Unusual Spending', low_balance:'Low Balance Alert', spending_increase:'Spending Increase', recurring:'Recurring Detection' };
+    const labels = {
+      budgetthreshold: 'Budget Spending Threshold',
+      budget_threshold: 'Budget Spending Threshold',
+      high_spending: 'High Spending Alert',
+      highspending: 'High Spending Alert',
+      unusual_spending: 'Unusual Spending',
+      unusualspending: 'Unusual Spending',
+      low_balance: 'Low Balance Alert',
+      lowbalance: 'Low Balance Alert',
+      spending_increase: 'Spending Increase',
+      spendingincrease: 'Spending Increase',
+      recurring: 'Recurring Detection'
+    };
     return labels[type] || type;
   },
 
   _renderPreview(rule) {
-    let text = rule.insightTemplate;
-    Object.entries(rule.params).forEach(([k,v])=>{ text=text.replace(new RegExp(`{${k}}`,'g'),`<strong>${v}</strong>`); });
+    let text = rule.insightTemplate || '';
+    const sampleValues = {
+      thresholdPercent: (rule.params && rule.params.thresholdPercent) || 50,
+      threshold: (rule.params && (rule.params.thresholdPercent || rule.params.threshold)) || 50,
+      currency: (rule.params && rule.params.currency) || 'OMR',
+      spentAmount: '114.500',
+      totalBudget: '505.000',
+      remainingAmount: '390.500',
+      categoryName: (rule.params && rule.params.categoryName) || 'Coffee',
+      period: (rule.params && rule.params.period) || 'monthly',
+      multiplier: (rule.params && rule.params.multiplier) || 3,
+      intervalDays: (rule.params && rule.params.intervalDays) || 30,
+      increasePercent: (rule.params && rule.params.increasePercent) || 20,
+      userName: 'Demo User'
+    };
+    if (rule.params) {
+      Object.entries(rule.params).forEach(([k, v]) => {
+        text = text.replace(new RegExp(`{${k}}`, 'g'), `<strong>${v}</strong>`);
+      });
+    }
+    Object.entries(sampleValues).forEach(([k, v]) => {
+      text = text.replace(new RegExp(`{${k}}`, 'g'), `<strong>${v}</strong>`);
+    });
     return text;
   },
 
   _renderParams(rule) {
-    return Object.entries(rule.params).map(([k,v])=>`
+    if (!rule.params) return '';
+    return Object.entries(rule.params).map(([k, v]) => `
       <div class="intel-param-chip">
-        <span style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">${k.replace(/_/g,' ')}</span>
-        <span style="font-size:13px;font-weight:600;color:var(--text-main);">${v}</span>
+        <span style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">${k.replace(/_/g, ' ')}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text-main);">${v}${k.toLowerCase().includes('percent') && typeof v === 'number' ? '%' : ''}</span>
       </div>`).join('');
   },
 
   async toggle(ruleId) {
-    const rule = state.intelligenceRules.find(r=>r.id===ruleId);
+    const rule = state.intelligenceRules.find(r => r.id === ruleId);
     if (!rule) return;
 
     try {
@@ -2576,104 +2672,514 @@ const Intelligence = {
       } else {
         rule.status = rule.status === 'active' ? 'inactive' : 'active';
       }
-      AuditLog.record('TOGGLE','IntelligenceRule',`${rule.status==='active'?'Activated':'Deactivated'} intelligence rule: ${rule.name}`);
+      AuditLog.record('TOGGLE', 'IntelligenceRule', `${rule.status === 'active' ? 'Activated' : 'Deactivated'} intelligence rule: ${rule.name}`);
       Toast.success(`Intelligence rule "${rule.name}" ${rule.status} in themarip.db.`);
       Intelligence.render();
-    } catch(err) {
+    } catch (err) {
       console.error('Error toggling intelligence rule:', err);
       Toast.error('Failed to toggle intelligence rule.');
     }
   },
 
   openModal(ruleId) {
-    const rule = state.intelligenceRules.find(r=>r.id===ruleId);
-    if (!rule) return;
-    document.getElementById('intel-modal-title').textContent = `Edit: ${rule.name}`;
+    const isCreate = !ruleId;
+    let rule = null;
+    if (!isCreate) {
+      rule = state.intelligenceRules.find(r => r.id === ruleId);
+      if (!rule) return;
+    }
+
+    const titleElem = document.getElementById('intel-modal-title');
+    titleElem.textContent = isCreate ? 'New Intelligence Rule' : `Edit: ${rule.name}`;
+
+    const isBudgetRule = isCreate || (rule && (rule.type === 'budgetthreshold' || rule.type === 'budget_threshold'));
+    const defaultThreshold = rule && rule.params && rule.params.thresholdPercent ? rule.params.thresholdPercent : 50;
+    const defaultTemplate = rule ? (rule.insightTemplate || '') : 'You have reached {thresholdPercent}% of your monthly budget ({spentAmount} of {totalBudget} {currency}).';
+    const defaultName = rule ? rule.name : 'Budget 50% Spending Alert';
+    const defaultStatus = rule ? rule.status : 'active';
 
     const body = document.getElementById('intel-modal-body');
     body.innerHTML = `
-      <input type="hidden" id="intel-form-rule-id" value="${rule.id}">
-      <div class="form-group">
-        <label class="form-label">Rule Name</label>
-        <input type="text" id="intel-form-name" class="form-control" value="${rule.name}">
+      <input type="hidden" id="intel-form-rule-id" value="${rule ? rule.id : ''}">
+      <input type="hidden" id="intel-form-is-create" value="${isCreate ? '1' : '0'}">
+      
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600;">Rule Name</label>
+          <input type="text" id="intel-form-name" class="form-control" value="${defaultName}" placeholder="e.g. Budget 70% Spending Alert">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600;">Rule Type</label>
+          <select id="intel-form-type" class="form-control" ${!isCreate ? 'disabled' : ''}>
+            <option value="BudgetThreshold" ${isBudgetRule ? 'selected' : ''}>Budget Spending Threshold</option>
+            <option value="HighSpending" ${rule && rule.type.includes('high') ? 'selected' : ''}>High Spending Alert</option>
+            <option value="UnusualSpending" ${rule && rule.type.includes('unusual') ? 'selected' : ''}>Unusual Spending Alert</option>
+            <option value="LowBalance" ${rule && rule.type.includes('balance') ? 'selected' : ''}>Low Balance Alert</option>
+            <option value="Recurring" ${rule && rule.type.includes('recurring') ? 'selected' : ''}>Recurring Detection</option>
+          </select>
+        </div>
       </div>
-      <div style="margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Parameters</div>
-      <div id="intel-param-inputs">
-        ${Object.entries(rule.params).map(([k,v])=>`
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:12px;">
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600;">Spending Threshold (%)</label>
+          <div style="position:relative;">
+            <input type="number" id="intel-form-threshold" class="form-control intel-param-input" data-param-key="thresholdPercent" value="${defaultThreshold}" min="1" max="200" step="1" style="padding-right:30px;">
+            <span style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-dim); font-size:13px; font-weight:600;">%</span>
+          </div>
+          <span style="font-size:11px; color:var(--text-dim); margin-top:4px; display:block;">Triggers when user spending reaches or exceeds this % of total budget.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600;">Delivery Channel</label>
+          <div style="background:rgba(139,92,246,0.12); border:1px solid rgba(139,92,246,0.3); border-radius:6px; padding:9px 12px; display:flex; align-items:center; gap:8px;">
+            <i data-lucide="bell" style="width:16px; color:#A78BFA;"></i>
+            <span style="font-size:13px; font-weight:600; color:#A78BFA;">Push Notification</span>
+            <span style="font-size:10px; background:rgba(139,92,246,0.25); color:#DDD6FE; padding:1px 6px; border-radius:10px; margin-left:auto;">Enforced Active</span>
+          </div>
+          <input type="hidden" class="intel-param-input" data-param-key="channel" value="Push Notification">
+          <input type="hidden" class="intel-param-input" data-param-key="period" value="monthly">
+          <input type="hidden" class="intel-param-input" data-param-key="scope" value="Overall">
+        </div>
+      </div>
+
+      ${!isBudgetRule && rule ? `
+      <div style="margin:16px 0 8px;font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Additional Parameters</div>
+      <div id="intel-param-inputs" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        ${Object.entries(rule.params).filter(([k]) => k !== 'thresholdPercent' && k !== 'channel').map(([k,v])=>`
           <div class="form-group">
             <label class="form-label">${k.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</label>
             <input type="text" class="form-control intel-param-input" data-param-key="${k}" value="${v}">
           </div>`).join('')}
+      </div>` : ''}
+
+      <div class="form-group" style="margin-top:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label class="form-label" style="font-weight:600; margin:0;">Push Notification Message Template</label>
+          <span style="font-size:11px; color:#A78BFA;">Admin customizable content</span>
+        </div>
+        
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+          <span style="font-size:11px; color:var(--text-dim); display:flex; align-items:center;">Insert parameter:</span>
+          <button type="button" class="btn btn-xs btn-ghost insert-var-btn" data-var="{thresholdPercent}" style="background:rgba(255,255,255,0.06);">{thresholdPercent}</button>
+          <button type="button" class="btn btn-xs btn-ghost insert-var-btn" data-var="{spentAmount}" style="background:rgba(255,255,255,0.06);">{spentAmount}</button>
+          <button type="button" class="btn btn-xs btn-ghost insert-var-btn" data-var="{totalBudget}" style="background:rgba(255,255,255,0.06);">{totalBudget}</button>
+          <button type="button" class="btn btn-xs btn-ghost insert-var-btn" data-var="{remainingAmount}" style="background:rgba(255,255,255,0.06);">{remainingAmount}</button>
+          <button type="button" class="btn btn-xs btn-ghost insert-var-btn" data-var="{currency}" style="background:rgba(255,255,255,0.06);">{currency}</button>
+          <button type="button" class="btn btn-xs btn-ghost insert-var-btn" data-var="{userName}" style="background:rgba(255,255,255,0.06);">{userName}</button>
+        </div>
+
+        <textarea id="intel-form-template" class="form-control" rows="3" style="font-family:monospace; font-size:13px; line-height:1.5;">${defaultTemplate}</textarea>
+        
+        <div style="margin-top:10px; background:rgba(0,0,0,0.3); border:1px dashed rgba(139,92,246,0.4); border-radius:8px; padding:12px;">
+          <div style="font-size:11px; color:#A78BFA; font-weight:600; text-transform:uppercase; margin-bottom:4px; display:flex; align-items:center; gap:5px;">
+            <i data-lucide="smartphone" style="width:12px; height:12px;"></i> Live Consumer Push Notification Preview:
+          </div>
+          <div id="intel-template-live-preview" style="font-size:13px; color:var(--text-main); line-height:1.4;">
+            ${defaultTemplate.replace('{thresholdPercent}', defaultThreshold).replace('{spentAmount}', '114.500').replace('{totalBudget}', '505.000').replace('{remainingAmount}', '390.500').replace('{currency}', 'OMR').replace('{userName}', 'Demo User')}
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Insight Template</label>
-        <textarea id="intel-form-template" class="form-control" rows="3">${rule.insightTemplate}</textarea>
-        <p style="font-size:11px;color:var(--text-dim);margin-top:4px;">Use {paramName} placeholders matching the parameters above.</p>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Status</label>
-        <select id="intel-form-status" class="form-control">
-          <option value="active" ${rule.status==='active'?'selected':''}>Active</option>
-          <option value="inactive" ${rule.status==='inactive'?'selected':''}>Inactive</option>
+
+      <div class="form-group" style="margin-top:14px;">
+        <label class="form-label" style="font-weight:600;">Rule Status</label>
+        <select id="intel-form-status" class="form-control" style="width:200px;">
+          <option value="active" ${defaultStatus === 'active' ? 'selected' : ''}>Active</option>
+          <option value="inactive" ${defaultStatus === 'inactive' ? 'selected' : ''}>Inactive</option>
         </select>
       </div>`;
 
+    // Live preview update
+    const templateInput = document.getElementById('intel-form-template');
+    const threshInput = document.getElementById('intel-form-threshold');
+    const livePreview = document.getElementById('intel-template-live-preview');
+
+    function updatePreview() {
+      const val = templateInput.value || '';
+      const th = threshInput ? threshInput.value || '50' : '50';
+      livePreview.innerHTML = val
+        .replace(/{thresholdPercent}/g, `<strong>${th}</strong>`)
+        .replace(/{threshold}/g, `<strong>${th}</strong>`)
+        .replace(/{spentAmount}/g, `<strong>114.500</strong>`)
+        .replace(/{totalBudget}/g, `<strong>505.000</strong>`)
+        .replace(/{remainingAmount}/g, `<strong>390.500</strong>`)
+        .replace(/{currency}/g, `<strong>OMR</strong>`)
+        .replace(/{userName}/g, `<strong>Demo User</strong>`)
+        .replace(/{period}/g, `<strong>monthly</strong>`);
+    }
+
+    templateInput.addEventListener('input', updatePreview);
+    if (threshInput) threshInput.addEventListener('input', updatePreview);
+
+    body.querySelectorAll('.insert-var-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const varText = btn.dataset.var;
+        const cur = templateInput.value;
+        const start = templateInput.selectionStart;
+        const end = templateInput.selectionEnd;
+        templateInput.value = cur.substring(0, start) + varText + cur.substring(end);
+        templateInput.focus();
+        templateInput.setSelectionRange(start + varText.length, start + varText.length);
+        updatePreview();
+      });
+    });
+
+    refreshIcons();
     Modal.open('intel-modal-overlay');
   },
 
   async saveModal() {
+    const isCreate = document.getElementById('intel-form-is-create').value === '1';
     const ruleId = document.getElementById('intel-form-rule-id').value;
-    const rule = state.intelligenceRules.find(r=>r.id===ruleId);
-    if (!rule) return;
+    const name = document.getElementById('intel-form-name').value.trim();
+    const template = document.getElementById('intel-form-template').value.trim();
+    const status = document.getElementById('intel-form-status').value;
+    const type = document.getElementById('intel-form-type') ? document.getElementById('intel-form-type').value : 'BudgetThreshold';
 
-    rule.name = document.getElementById('intel-form-name').value.trim() || rule.name;
-    rule.insightTemplate = document.getElementById('intel-form-template').value.trim() || rule.insightTemplate;
-    rule.status = document.getElementById('intel-form-status').value;
+    if (!name) {
+      Toast.error('Please enter a rule name.');
+      return;
+    }
+    if (!template) {
+      Toast.error('Please enter a push notification message template.');
+      return;
+    }
 
-    document.querySelectorAll('.intel-param-input').forEach(input=>{
+    const params = {};
+    document.querySelectorAll('.intel-param-input').forEach(input => {
       const key = input.dataset.paramKey;
       const val = input.value;
       const num = parseFloat(val);
-      rule.params[key] = isNaN(num) ? val : num;
+      params[key] = !isNaN(num) && String(num) === val.trim() ? num : val;
     });
 
-    if (ruleId && ruleId.length > 10) {
+    if (isCreate) {
+      try {
+        const payload = {
+          name,
+          type: type || 'BudgetThreshold',
+          insightTemplate: template,
+          status,
+          icon: type === 'BudgetThreshold' ? 'pie-chart' : 'bell',
+          iconColor: '#8B5CF6',
+          params
+        };
+
+        const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const created = await res.json();
+          Toast.success(`Created intelligence rule "${name}" in themarip.db.`);
+          AuditLog.record('CREATE', 'IntelligenceRule', `Created intelligence rule: ${name}`);
+          await loadIntelligenceRulesFromDb();
+        } else {
+          Toast.error('Failed to create intelligence rule in database.');
+        }
+      } catch (err) {
+        console.error('Error creating intelligence rule:', err);
+        Toast.error('Failed to create intelligence rule.');
+      }
+    } else {
+      const rule = state.intelligenceRules.find(r => r.id === ruleId);
+      if (rule) {
+        rule.name = name;
+        rule.insightTemplate = template;
+        rule.status = status;
+        Object.assign(rule.params, params);
+      }
+
       try {
         const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules/${ruleId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: rule.name,
-            insightTemplate: rule.insightTemplate,
-            status: rule.status,
-            params: rule.params
+            name,
+            insightTemplate: template,
+            status,
+            params
           })
         });
+
         if (res.ok) {
-          Toast.success(`Intelligence rule "${rule.name}" updated in themarip.db.`);
+          Toast.success(`Intelligence rule "${name}" updated in themarip.db.`);
         } else {
-          Toast.success(`Intelligence rule "${rule.name}" updated.`);
+          Toast.success(`Intelligence rule "${name}" updated.`);
         }
-      } catch(e) {
-        console.error(e);
-        Toast.success(`Intelligence rule "${rule.name}" updated.`);
+        AuditLog.record('UPDATE', 'IntelligenceRule', `Updated intelligence rule: ${name}`);
+        await loadIntelligenceRulesFromDb();
+      } catch (err) {
+        console.error('Error updating rule:', err);
+        Toast.error('Failed to update intelligence rule.');
       }
-    } else {
-      Toast.success(`Intelligence rule "${rule.name}" updated.`);
     }
 
-    AuditLog.record('UPDATE','IntelligenceRule',`Updated intelligence rule: ${rule.name}`);
     Modal.close('intel-modal-overlay');
     Intelligence.render();
   },
 
+  async deleteRule(ruleId) {
+    const rule = state.intelligenceRules.find(r => r.id === ruleId);
+    const ruleName = rule ? rule.name : 'rule';
+    if (!confirm(`Are you sure you want to delete intelligence rule "${ruleName}"?`)) return;
+
+    try {
+      const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules/${ruleId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        state.intelligenceRules = state.intelligenceRules.filter(r => r.id !== ruleId);
+        Toast.success(`Rule "${ruleName}" deleted from themarip.db.`);
+        AuditLog.record('DELETE', 'IntelligenceRule', `Deleted intelligence rule: ${ruleName}`);
+        Intelligence.render();
+      } else {
+        Toast.error('Failed to delete rule.');
+      }
+    } catch (e) {
+      console.error(e);
+      Toast.error('Failed to delete rule.');
+    }
+  },
+
+  async evaluateRule(ruleId) {
+    const rule = state.intelligenceRules.find(r => r.id === ruleId);
+    Toast.info(`Evaluating "${rule ? rule.name : 'rule'}" against live user budget data...`);
+
+    try {
+      const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ruleId, force: true })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        await loadIntelligenceRulesFromDb();
+        Intelligence._showEvaluationResultsModal(data);
+      } else {
+        Toast.error('Failed to evaluate rule.');
+      }
+    } catch (e) {
+      console.error(e);
+      Toast.error('Evaluation error.');
+    }
+  },
+
+  async evaluateAll() {
+    Toast.info('Evaluating budget threshold rules across active users...');
+
+    try {
+      const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        await loadIntelligenceRulesFromDb();
+        Intelligence._showEvaluationResultsModal(data);
+      } else {
+        Toast.error('Failed to execute evaluation engine.');
+      }
+    } catch (e) {
+      console.error(e);
+      Toast.error('Evaluation engine error.');
+    }
+  },
+
+  async openAlertsLog() {
+    try {
+      const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules/alerts`);
+      if (res.ok) {
+        const alerts = await res.json();
+        Intelligence._showDispatchedAlertsModal(alerts);
+      } else {
+        Toast.error('Failed to fetch alerts log.');
+      }
+    } catch (e) {
+      console.error(e);
+      Toast.error('Failed to fetch alerts log.');
+    }
+  },
+
+  async updateAlertsBadge() {
+    try {
+      const res = await fetch(`${THEMAR_API_BASE}/statements/intelligence-rules/alerts`);
+      if (res.ok) {
+        const alerts = await res.json();
+        const badge = document.getElementById('intel-alerts-count');
+        if (badge) badge.textContent = Array.isArray(alerts) ? alerts.length : 0;
+      }
+    } catch (_) {}
+  },
+
+  _showEvaluationResultsModal(data) {
+    const modalTitle = document.getElementById('intel-alerts-modal-title');
+    modalTitle.textContent = 'Rule Evaluation & Push Notifications';
+
+    const summaryText = document.getElementById('intel-alerts-summary-text');
+    summaryText.textContent = `Evaluated ${data.evaluatedRules} rules against ${data.evaluatedUsers} active budget users. ${data.notificationsTriggered} push notifications triggered.`;
+
+    const body = document.getElementById('intel-alerts-modal-body');
+    if (!data.notifications || data.notifications.length === 0) {
+      body.innerHTML = `
+        <div style="text-align:center; padding:35px 20px;">
+          <div style="width:48px;height:48px;border-radius:50%;background:rgba(139,92,246,0.15);color:#A78BFA;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+            <i data-lucide="check-circle" style="width:24px;height:24px;"></i>
+          </div>
+          <h4 style="margin:0 0 6px;">Evaluation Completed Successfully</h4>
+          <p style="font-size:13px; color:var(--text-muted); margin:0;">All rules evaluated. Current user spending has not exceeded active thresholds, or no new triggers were needed.</p>
+        </div>`;
+    } else {
+      body.innerHTML = `
+        <div style="margin-bottom:14px; background:rgba(139,92,246,0.12); border:1px solid rgba(139,92,246,0.3); border-radius:8px; padding:12px 16px; display:flex; align-items:center; justify-content:space-between;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <i data-lucide="send" style="width:18px; color:#A78BFA;"></i>
+            <span style="font-weight:600; font-size:13px; color:#DDD6FE;">${data.notifications.length} Push Notifications Dispatched to Consumers</span>
+          </div>
+          <span class="badge" style="background:#10B981; color:#fff; font-size:11px;">Delivery Channel: Push Notification</span>
+        </div>
+
+        <table class="table" style="width:100%; font-size:12px;">
+          <thead>
+            <tr>
+              <th>Consumer User</th>
+              <th>Triggered Rule</th>
+              <th>Spending vs Threshold</th>
+              <th>Push Notification Content</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.notifications.map(n => `
+              <tr>
+                <td>
+                  <div style="font-weight:600; color:var(--text-main);">${n.userName}</div>
+                  <div style="font-size:11px; color:var(--text-dim);">${n.userEmail}</div>
+                </td>
+                <td>
+                  <span style="font-weight:600; color:#A78BFA;">${n.ruleName}</span>
+                </td>
+                <td>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span class="badge" style="background:rgba(239,68,68,0.15); color:#F87171; font-weight:600;">${n.currentSpendPercent}%</span>
+                    <span style="color:var(--text-dim); font-size:11px;">≥ ${n.thresholdPercent}%</span>
+                  </div>
+                  <div style="font-size:10px; color:var(--text-dim); margin-top:2px;">${n.spentAmount} of ${n.totalBudget} ${n.currency}</div>
+                </td>
+                <td style="max-width:320px;">
+                  <div style="background:rgba(255,255,255,0.04); border-left:2px solid #8B5CF6; padding:6px 8px; border-radius:0 4px 4px 0; font-style:italic;">
+                    "${n.message}"
+                  </div>
+                </td>
+                <td>
+                  <span class="badge badge-active" style="display:inline-flex; align-items:center; gap:4px;">
+                    <i data-lucide="check" style="width:10px;"></i> Delivered
+                  </span>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    refreshIcons();
+    Modal.open('intel-alerts-modal-overlay');
+  },
+
+  _showDispatchedAlertsModal(alerts) {
+    const modalTitle = document.getElementById('intel-alerts-modal-title');
+    modalTitle.textContent = 'Push Notification Delivery Log';
+
+    const summaryText = document.getElementById('intel-alerts-summary-text');
+    summaryText.textContent = `Showing latest ${alerts.length} push notification alerts stored in themarip.db`;
+
+    const body = document.getElementById('intel-alerts-modal-body');
+    if (!alerts || alerts.length === 0) {
+      body.innerHTML = `
+        <div style="text-align:center; padding:35px 20px;">
+          <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.06);color:var(--text-dim);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+            <i data-lucide="inbox" style="width:24px;height:24px;"></i>
+          </div>
+          <h4 style="margin:0 0 6px;">No Push Notification Alerts Yet</h4>
+          <p style="font-size:13px; color:var(--text-muted); margin:0;">Click "Evaluate & Push Now" or wait for scheduled budget evaluation to trigger alerts.</p>
+        </div>`;
+    } else {
+      body.innerHTML = `
+        <table class="table" style="width:100%; font-size:12px;">
+          <thead>
+            <tr>
+              <th>Dispatched At</th>
+              <th>Consumer User</th>
+              <th>Rule Name</th>
+              <th>Push Notification Message</th>
+              <th>Channel</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${alerts.map(a => `
+              <tr>
+                <td style="white-space:nowrap; color:var(--text-dim); font-size:11px;">
+                  ${Utils.fmt.datetime ? Utils.fmt.datetime(a.triggeredAt) : a.triggeredAt.substring(0, 19).replace('T', ' ')}
+                </td>
+                <td>
+                  <div style="font-weight:600; color:var(--text-main);">${a.userName}</div>
+                  <div style="font-size:11px; color:var(--text-dim);">${a.userEmail}</div>
+                </td>
+                <td style="font-weight:600; color:#A78BFA;">${a.ruleName}</td>
+                <td style="max-width:340px;">
+                  <div style="background:rgba(255,255,255,0.04); border-left:2px solid #8B5CF6; padding:6px 8px; border-radius:0 4px 4px 0; font-style:italic;">
+                    "${a.message}"
+                  </div>
+                </td>
+                <td>
+                  <span class="badge" style="background:rgba(139,92,246,0.18); color:#A78BFA; font-weight:600;">
+                    <i data-lucide="bell" style="width:10px; margin-right:3px;"></i> Push
+                  </span>
+                </td>
+                <td>
+                  <span class="badge badge-active" style="display:inline-flex; align-items:center; gap:4px;">
+                    <i data-lucide="check" style="width:10px;"></i> Delivered
+                  </span>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    refreshIcons();
+    Modal.open('intel-alerts-modal-overlay');
+  },
+
   initEvents() {
-    document.getElementById('btn-add-intel-rule').addEventListener('click', ()=>{
-      Toast.info('Select an existing rule to edit its parameters, or use the Edit button on any rule card.');
-    });
-    document.getElementById('intel-modal-save').addEventListener('click', Intelligence.saveModal);
-    document.getElementById('intel-modal-cancel').addEventListener('click', ()=>Modal.close('intel-modal-overlay'));
-    document.getElementById('intel-modal-close').addEventListener('click', ()=>Modal.close('intel-modal-overlay'));
+    const addBtn = document.getElementById('btn-add-intel-rule');
+    if (addBtn) addBtn.addEventListener('click', () => Intelligence.openModal(null));
+
+    const evalBtn = document.getElementById('btn-evaluate-intel-rules');
+    if (evalBtn) evalBtn.addEventListener('click', () => Intelligence.evaluateAll());
+
+    const alertsBtn = document.getElementById('btn-view-intel-alerts');
+    if (alertsBtn) alertsBtn.addEventListener('click', () => Intelligence.openAlertsLog());
+
+    const saveBtn = document.getElementById('intel-modal-save');
+    if (saveBtn) saveBtn.addEventListener('click', Intelligence.saveModal);
+
+    const cancelBtn = document.getElementById('intel-modal-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => Modal.close('intel-modal-overlay'));
+
+    const closeBtn = document.getElementById('intel-modal-close');
+    if (closeBtn) closeBtn.addEventListener('click', () => Modal.close('intel-modal-overlay'));
+
+    const alertsClose = document.getElementById('intel-alerts-modal-close');
+    if (alertsClose) alertsClose.addEventListener('click', () => Modal.close('intel-alerts-modal-overlay'));
+
+    const alertsDismiss = document.getElementById('intel-alerts-modal-dismiss');
+    if (alertsDismiss) alertsDismiss.addEventListener('click', () => Modal.close('intel-alerts-modal-overlay'));
   }
 };
 

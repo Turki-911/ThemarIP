@@ -90,6 +90,10 @@ class _CategoryBudgetsScreenState extends State<CategoryBudgetsScreen> {
             BudgetWizardHeader(
               activeStep: 1,
               onBack: widget.onBack,
+              trailingLabel: 'Re-setup',
+              onTrailingTap: () {
+                widget.controller.setStep(0);
+              },
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -147,13 +151,24 @@ class _CategoryBudgetsScreenState extends State<CategoryBudgetsScreen> {
             Semantics(
               button: true,
               label: BudgetConstants.autoFillButtonLabel,
-              child: FilledButton(
+              child: OutlinedButton(
                 onPressed: _handleAutoFill,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.cardBackground,
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
                   foregroundColor: AppColors.ink,
+                  side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  minimumSize: const Size.fromHeight(52),
                 ),
-                child: const Text(BudgetConstants.autoFillButtonLabel),
+                child: const Text(
+                  BudgetConstants.autoFillButtonLabel,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -162,7 +177,21 @@ class _CategoryBudgetsScreenState extends State<CategoryBudgetsScreen> {
               label: BudgetConstants.continueLabel,
               child: FilledButton(
                 onPressed: widget.onContinue,
-                child: const Text(BudgetConstants.continueLabel),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryPurple,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  minimumSize: const Size.fromHeight(52),
+                ),
+                child: const Text(
+                  BudgetConstants.continueLabel,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
           ],
@@ -201,11 +230,27 @@ class _AllocationProgressCard extends StatelessWidget {
                 '$pct% set',
                 style: textTheme.titleMedium,
               ),
-              Flexible(
-                child: Text(
-                  '$allocatedStr / $totalStr',
-                  textAlign: TextAlign.right,
-                  style: textTheme.titleMedium?.copyWith(fontSize: 15),
+              InkWell(
+                onTap: () => controller.setStep(0),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$allocatedStr / $totalStr',
+                        textAlign: TextAlign.right,
+                        style: textTheme.titleMedium?.copyWith(fontSize: 15),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.edit_outlined,
+                        size: 14,
+                        color: AppColors.primaryPurple,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

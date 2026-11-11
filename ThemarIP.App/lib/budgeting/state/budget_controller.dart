@@ -6,7 +6,7 @@ import '../models/budget_models.dart';
 /// Single in-memory ChangeNotifier managing the Budgeting flow AND
 /// reflecting configured budgets directly into the Category Hierarchy screen.
 class BudgetController extends ChangeNotifier {
-  double _monthlyTotal = 0.0;
+  double _monthlyTotal = 200.0;
   List<BudgetCategoryModel> _categories = List.of(
     BudgetConstants.defaultCategories,
   );
@@ -363,6 +363,20 @@ class BudgetController extends ChangeNotifier {
       0.0,
       (sum, c) => sum + spentForCategory(c.id),
     );
+  }
+
+  /// Total spending across active budgeted categories.
+  double get totalSpent => totalDashboardSpending;
+
+  /// Whether the user has an active, configured budget.
+  bool get hasConfiguredBudget =>
+      _isBudgetActive && _monthlyTotal > 0 && (_categoryBudgets.values.any((v) => v > 0) || _categoryBudgets.isNotEmpty);
+
+  /// Total remaining allowance from monthlyTotal minus spending.
+  double get remainingTotal {
+    final effective = _monthlyTotal > 0 ? _monthlyTotal : totalAllocated;
+    final remaining = effective - totalSpent;
+    return remaining < 0 ? 0.0 : remaining;
   }
 
   double get committedSpending => BudgetConstants.committedSpendingOmr;

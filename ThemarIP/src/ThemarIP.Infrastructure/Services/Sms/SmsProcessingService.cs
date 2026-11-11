@@ -483,7 +483,7 @@ public class SmsProcessingService : ISmsProcessingService
     {
         take = Math.Clamp(take, 1, 500);
         var rows = await _db.SmsProcessingLogs.ToListAsync();
-        var users = await _db.Users.ToDictionaryAsync(u => u.Id, u => u.Email);
+        var users = await _db.Users.Select(u => new { u.Id, u.Email }).ToDictionaryAsync(u => u.Id, u => u.Email);
         return rows.OrderByDescending(l => l.CreatedAt).Take(take).Select(l => new SmsLogDto
         {
             Id = l.Id,

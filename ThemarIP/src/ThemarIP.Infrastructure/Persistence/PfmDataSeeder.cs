@@ -482,6 +482,44 @@ public static class PfmDataSeeder
                     ("period",       "monthly",       IntelligenceRuleParamType.String),
                 }
             ),
+            (
+                new PfmIntelligenceRule
+                {
+                    Name            = "Budget 50% Threshold Reached",
+                    RuleType        = IntelligenceRuleType.BudgetThreshold,
+                    Status          = IntelligenceRuleStatus.Active,
+                    InsightTemplate = "You have reached {thresholdPercent}% of your monthly budget ({spentAmount} of {totalBudget} {currency}).",
+                    Icon            = "pie-chart",
+                    IconColor       = "#7C3AED",
+                    FireCount       = 0,
+                },
+                new[]
+                {
+                    ("thresholdPercent", "50",                IntelligenceRuleParamType.Number),
+                    ("period",           "monthly",           IntelligenceRuleParamType.String),
+                    ("channel",          "Push Notification", IntelligenceRuleParamType.String),
+                    ("scope",            "Overall",           IntelligenceRuleParamType.String),
+                }
+            ),
+            (
+                new PfmIntelligenceRule
+                {
+                    Name            = "Budget 80% Warning",
+                    RuleType        = IntelligenceRuleType.BudgetThreshold,
+                    Status          = IntelligenceRuleStatus.Active,
+                    InsightTemplate = "Warning: You have used {thresholdPercent}% of your monthly budget. Only {remainingAmount} {currency} remaining.",
+                    Icon            = "alert-circle",
+                    IconColor       = "#F59E0B",
+                    FireCount       = 0,
+                },
+                new[]
+                {
+                    ("thresholdPercent", "80",                IntelligenceRuleParamType.Number),
+                    ("period",           "monthly",           IntelligenceRuleParamType.String),
+                    ("channel",          "Push Notification", IntelligenceRuleParamType.String),
+                    ("scope",            "Overall",           IntelligenceRuleParamType.String),
+                }
+            ),
         };
 
         foreach (var (rule, paramDefs) in rules)

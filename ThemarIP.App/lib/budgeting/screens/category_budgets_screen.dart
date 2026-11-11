@@ -302,7 +302,11 @@ class _CategoryBudgetRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          CategoryIconChip(icon: category.icon),
+          CategoryIconChip(
+            categoryName: category.name,
+            icon: category.icon,
+            color: category.color,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

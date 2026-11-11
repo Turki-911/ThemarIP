@@ -1,7 +1,8 @@
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../../models/bmpf_models.dart';
 import '../models/budget_models.dart';
+import '../widgets/budget_widgets.dart';
 
 /// Single in-memory ChangeNotifier managing the Budgeting flow AND
 /// reflecting configured budgets directly into the Category Hierarchy screen.
@@ -93,6 +94,14 @@ class BudgetController extends ChangeNotifier {
           ? defaultMatch.first.sampleSpendRatio
           : 0.50;
 
+      Color? nodeColor;
+      if (node.color.startsWith('#') && node.color.toUpperCase() != '#7C3AED') {
+        try {
+          nodeColor = Color(int.parse(node.color.replaceFirst('#', '0xFF')));
+        } catch (_) {}
+      }
+      nodeColor ??= CategoryIconChip.resolveCategoryColor(node.name);
+
       seenKeys.add(key);
       synced.add(
         BudgetCategoryModel(
@@ -106,6 +115,7 @@ class BudgetController extends ChangeNotifier {
           sampleSpendRatio: fallbackRatio,
           liveSpentOmr: activeSpend,
           liveTxnCount: txCount,
+          color: nodeColor,
         ),
       );
       _sampleSpendRatios.putIfAbsent(key, () => fallbackRatio);

@@ -192,35 +192,191 @@ class BudgetSurfaceCard extends StatelessWidget {
   }
 }
 
-/// Circular grey chip (#F4F3FA) housing a Material outline icon.
+/// Category Icon Chip styled identically to the Category Hierarchy page:
+/// 38x38 rounded-rectangle (10px radius) with 12% opacity tint background and vibrant category glyph color.
 class CategoryIconChip extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final String? categoryName;
+  final Color? color;
   final double size;
   final double iconSize;
-  final Color iconColor;
+  final Color? iconColor;
 
   const CategoryIconChip({
     super.key,
-    required this.icon,
-    this.size = 42,
+    this.icon,
+    this.categoryName,
+    this.color,
+    this.size = 38,
     this.iconSize = 20,
-    this.iconColor = AppColors.ink,
+    this.iconColor,
   });
+
+  static Color resolveCategoryColor(String? name, [Color? explicitColor]) {
+    if (explicitColor != null) return explicitColor;
+    if (name == null || name.isEmpty) return const Color(0xFF7C3AED);
+
+    final nameLower = name.toLowerCase().trim();
+    if (nameLower.contains('food') ||
+        nameLower.contains('grocer') ||
+        nameLower.contains('restaur') ||
+        nameLower.contains('coffee') ||
+        nameLower.contains('eat') ||
+        nameLower.contains('dining')) {
+      return const Color(0xFF10B981); // Admin Portal Food: #10B981
+    } else if (nameLower.contains('transport') ||
+        nameLower.contains('fuel') ||
+        nameLower.contains('car') ||
+        nameLower.contains('taxi') ||
+        nameLower.contains('petrol')) {
+      return const Color(0xFF3B82F6); // Admin Portal Transport: #3B82F6
+    } else if (nameLower.contains('shop') ||
+        nameLower.contains('cloth') ||
+        nameLower.contains('mall')) {
+      return const Color(0xFF8B5CF6); // Admin Portal Shopping: #8B5CF6
+    } else if (nameLower.contains('telecom') ||
+        nameLower.contains('wifi') ||
+        nameLower.contains('mobile') ||
+        nameLower.contains('internet') ||
+        nameLower.contains('phone')) {
+      return const Color(0xFF06B6D4); // Admin Portal Telecom: #06B6D4
+    } else if (nameLower.contains('bill') ||
+        nameLower.contains('util') ||
+        nameLower.contains('electr') ||
+        nameLower.contains('water')) {
+      return const Color(0xFFF59E0B); // Admin Portal Bills & Utilities: #F59E0B
+    } else if (nameLower.contains('entertain') ||
+        nameLower.contains('stream') ||
+        nameLower.contains('game') ||
+        nameLower.contains('movie') ||
+        nameLower.contains('tv')) {
+      return const Color(0xFFEC4899); // Admin Portal Entertainment: #EC4899
+    } else if (nameLower.contains('health') ||
+        nameLower.contains('pharm') ||
+        nameLower.contains('hospital') ||
+        nameLower.contains('doctor')) {
+      return const Color(0xFFF43F5E); // Admin Portal Health: #F43F5E
+    } else if (nameLower.contains('travel') ||
+        nameLower.contains('flight') ||
+        nameLower.contains('hotel')) {
+      return const Color(0xFF06B6D4); // Admin Portal Travel: #06B6D4
+    } else if (nameLower.contains('income') ||
+        nameLower.contains('salary') ||
+        nameLower.contains('deposit')) {
+      return const Color(0xFF059669); // Admin Portal Income: #059669
+    } else if (nameLower.contains('transfer') ||
+        nameLower.contains('atm') ||
+        nameLower.contains('saving')) {
+      return const Color(0xFF6366F1); // Transfers
+    } else if (nameLower.contains('other') ||
+        nameLower.contains('uncategor')) {
+      return const Color(0xFF64748B); // Admin Portal Other: #64748B
+    }
+    return const Color(0xFF7C3AED);
+  }
+
+  static IconData resolveCategoryIcon(String? name, [IconData? explicitIcon]) {
+    if (explicitIcon != null &&
+        explicitIcon != Icons.category_outlined &&
+        explicitIcon != Icons.help_outline) {
+      return explicitIcon;
+    }
+    if (name == null || name.isEmpty) return Icons.local_offer_rounded;
+
+    final nameLower = name.toLowerCase().trim();
+    if (nameLower.contains('coffee') || nameLower.contains('cafe')) {
+      return Icons.coffee_rounded;
+    }
+    if (nameLower.contains('grocer') || nameLower.contains('supermarket')) {
+      return Icons.local_grocery_store_rounded;
+    }
+    if (nameLower.contains('food') ||
+        nameLower.contains('restaur') ||
+        nameLower.contains('dining') ||
+        nameLower.contains('eat')) {
+      return Icons.restaurant_rounded;
+    }
+    if (nameLower.contains('fuel') || nameLower.contains('petrol')) {
+      return Icons.local_gas_station_rounded;
+    }
+    if (nameLower.contains('transport') ||
+        nameLower.contains('car') ||
+        nameLower.contains('taxi')) {
+      return Icons.directions_car_filled_rounded;
+    }
+    if (nameLower.contains('shop') ||
+        nameLower.contains('cloth') ||
+        nameLower.contains('mall')) {
+      return Icons.shopping_bag_rounded;
+    }
+    if (nameLower.contains('telecom') ||
+        nameLower.contains('wifi') ||
+        nameLower.contains('mobile') ||
+        nameLower.contains('internet') ||
+        nameLower.contains('phone')) {
+      return Icons.wifi_rounded;
+    }
+    if (nameLower.contains('bill') ||
+        nameLower.contains('util') ||
+        nameLower.contains('electr') ||
+        nameLower.contains('water')) {
+      return Icons.receipt_long_rounded;
+    }
+    if (nameLower.contains('entertain') ||
+        nameLower.contains('stream') ||
+        nameLower.contains('game') ||
+        nameLower.contains('movie')) {
+      return Icons.live_tv_rounded;
+    }
+    if (nameLower.contains('health') ||
+        nameLower.contains('pharm') ||
+        nameLower.contains('doctor') ||
+        nameLower.contains('hospital')) {
+      return Icons.monitor_heart_rounded;
+    }
+    if (nameLower.contains('travel') ||
+        nameLower.contains('flight') ||
+        nameLower.contains('hotel')) {
+      return Icons.flight_takeoff_rounded;
+    }
+    if (nameLower.contains('income') ||
+        nameLower.contains('salary') ||
+        nameLower.contains('refund')) {
+      return Icons.trending_up_rounded;
+    }
+    if (nameLower.contains('transfer') ||
+        nameLower.contains('atm') ||
+        nameLower.contains('saving')) {
+      return Icons.swap_horiz_rounded;
+    }
+    if (nameLower.contains('business') || nameLower.contains('work')) {
+      return Icons.work_rounded;
+    }
+    if (nameLower.contains('educat') ||
+        nameLower.contains('book') ||
+        nameLower.contains('school')) {
+      return Icons.school_rounded;
+    }
+    return Icons.local_offer_rounded;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final catColor = resolveCategoryColor(categoryName, color ?? iconColor);
+    final iconData = resolveCategoryIcon(categoryName, icon);
+
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-        color: AppColors.chipGrey,
-        shape: BoxShape.circle,
+      decoration: BoxDecoration(
+        color: catColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
       ),
       alignment: Alignment.center,
       child: Icon(
-        icon,
+        iconData,
         size: iconSize,
-        color: iconColor,
+        color: catColor,
       ),
     );
   }

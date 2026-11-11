@@ -266,7 +266,10 @@ class _DailyAllowanceCard extends StatelessWidget {
     return BudgetSurfaceCard(
       child: Row(
         children: [
-          const CategoryIconChip(icon: Icons.date_range_outlined),
+          const CategoryIconChip(
+            icon: Icons.calendar_today_rounded,
+            color: AppColors.primaryPurple,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -324,7 +327,11 @@ class _CategorySpendProgressRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              CategoryIconChip(icon: category.icon),
+              CategoryIconChip(
+                icon: category.icon,
+                categoryName: category.name,
+                color: category.color,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(

@@ -144,7 +144,7 @@ class _ConfirmSummaryRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
         children: [
-          CategoryIconChip(icon: icon),
+          CategoryIconChip(icon: icon, categoryName: label),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

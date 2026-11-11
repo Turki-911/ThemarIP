@@ -11,6 +11,7 @@ class BudgetCategoryModel {
   final double sampleSpendRatio;
   final double? liveSpentOmr;
   final int liveTxnCount;
+  final Color? color;
 
   const BudgetCategoryModel({
     required this.id,
@@ -20,6 +21,7 @@ class BudgetCategoryModel {
     this.sampleSpendRatio = 0.50,
     this.liveSpentOmr,
     this.liveTxnCount = 0,
+    this.color,
   });
 
   BudgetCategoryModel copyWith({
@@ -30,6 +32,7 @@ class BudgetCategoryModel {
     double? sampleSpendRatio,
     double? liveSpentOmr,
     int? liveTxnCount,
+    Color? color,
   }) {
     return BudgetCategoryModel(
       id: id ?? this.id,
@@ -39,6 +42,7 @@ class BudgetCategoryModel {
       sampleSpendRatio: sampleSpendRatio ?? this.sampleSpendRatio,
       liveSpentOmr: liveSpentOmr ?? this.liveSpentOmr,
       liveTxnCount: liveTxnCount ?? this.liveTxnCount,
+      color: color ?? this.color,
     );
   }
 }
@@ -110,70 +114,80 @@ class BudgetConstants {
     BudgetCategoryModel(
       id: 'food',
       name: 'Food',
-      icon: Icons.restaurant_outlined,
+      icon: Icons.restaurant_rounded,
+      color: Color(0xFF10B981),
       threeMonthAverageOmr: 21.900,
       sampleSpendRatio: 0.70,
     ),
     BudgetCategoryModel(
       id: 'transport',
       name: 'Transport',
-      icon: Icons.directions_car_outlined,
+      icon: Icons.directions_car_filled_rounded,
+      color: Color(0xFF3B82F6),
       threeMonthAverageOmr: 19.530,
       sampleSpendRatio: 0.55,
     ),
     BudgetCategoryModel(
       id: 'shopping',
       name: 'Shopping',
-      icon: Icons.shopping_bag_outlined,
+      icon: Icons.shopping_bag_rounded,
+      color: Color(0xFF8B5CF6),
       threeMonthAverageOmr: 2.050,
       sampleSpendRatio: 0.40,
     ),
     BudgetCategoryModel(
       id: 'telecom',
       name: 'Telecom',
-      icon: Icons.wifi_outlined,
+      icon: Icons.wifi_rounded,
+      color: Color(0xFF06B6D4),
       threeMonthAverageOmr: 20.000,
       sampleSpendRatio: 0.80,
     ),
     BudgetCategoryModel(
       id: 'other',
       name: 'Other',
-      icon: Icons.category_outlined,
+      icon: Icons.local_offer_rounded,
+      color: Color(0xFF64748B),
       threeMonthAverageOmr: 6.790,
       sampleSpendRatio: 0.50,
     ),
     BudgetCategoryModel(
       id: 'bills',
       name: 'Bills',
-      icon: Icons.lightbulb_outline,
+      icon: Icons.receipt_long_rounded,
+      color: Color(0xFFF59E0B),
       threeMonthAverageOmr: 120.000,
       sampleSpendRatio: 0.70,
     ),
     BudgetCategoryModel(
       id: 'entertainment',
       name: 'Entertainment',
-      icon: Icons.sports_esports_outlined,
+      icon: Icons.live_tv_rounded,
+      color: Color(0xFFEC4899),
       threeMonthAverageOmr: 30.000,
       sampleSpendRatio: 0.50,
     ),
     BudgetCategoryModel(
       id: 'health',
       name: 'Health',
-      icon: Icons.medical_services_outlined,
+      icon: Icons.monitor_heart_rounded,
+      color: Color(0xFFF43F5E),
       threeMonthAverageOmr: 20.000,
       sampleSpendRatio: 0.30,
     ),
     BudgetCategoryModel(
       id: 'business',
       name: 'Business',
-      icon: Icons.work_outline,
+      icon: Icons.work_rounded,
+      color: Color(0xFF6366F1),
       threeMonthAverageOmr: 60.000,
       sampleSpendRatio: 0.35,
     ),
     BudgetCategoryModel(
       id: 'charity',
       name: 'Charity',
-      icon: Icons.favorite_border,
+      icon: Icons.favorite_rounded,
+      color: Color(0xFF10B981),
       threeMonthAverageOmr: 10.000,
       sampleSpendRatio: 0.50,
     ),
@@ -200,59 +214,61 @@ class BudgetConstants {
     if (lower.contains('food') ||
         lower.contains('eat') ||
         lower.contains('restaur') ||
-        key == 'utensils') {
-      return Icons.restaurant_outlined;
+        lower.contains('grocer') ||
+        key == 'utensils' ||
+        key == 'food') {
+      return Icons.restaurant_rounded;
     }
     if (lower.contains('transport') ||
         lower.contains('car') ||
         lower.contains('fuel') ||
         key == 'car') {
-      return Icons.directions_car_outlined;
+      return Icons.directions_car_filled_rounded;
     }
     if (lower.contains('shop') || key.contains('shopping')) {
-      return Icons.shopping_bag_outlined;
+      return Icons.shopping_bag_rounded;
     }
     if (lower.contains('telecom') ||
         lower.contains('wifi') ||
         lower.contains('internet') ||
         key == 'wifi') {
-      return Icons.wifi_outlined;
+      return Icons.wifi_rounded;
     }
     if (lower.contains('bill') ||
         lower.contains('util') ||
         lower.contains('electr') ||
         key == 'file-text' ||
         key == 'zap') {
-      return Icons.lightbulb_outline;
+      return Icons.receipt_long_rounded;
     }
     if (lower.contains('entertain') ||
         lower.contains('game') ||
         lower.contains('stream') ||
         key == 'tv') {
-      return Icons.sports_esports_outlined;
+      return Icons.live_tv_rounded;
     }
     if (lower.contains('business') ||
         lower.contains('work') ||
         key == 'briefcase') {
-      return Icons.work_outline;
+      return Icons.work_rounded;
     }
     if (lower.contains('health') ||
         lower.contains('hospital') ||
         lower.contains('pharm') ||
         key == 'heart-pulse') {
-      return Icons.medical_services_outlined;
+      return Icons.monitor_heart_rounded;
     }
     if (lower.contains('charity') ||
         lower.contains('sadaq') ||
         key == 'heart') {
-      return Icons.favorite_border;
+      return Icons.favorite_rounded;
     }
     if (lower.contains('travel') ||
         lower.contains('flight') ||
         key == 'plane') {
-      return Icons.flight_takeoff_outlined;
+      return Icons.flight_takeoff_rounded;
     }
-    return Icons.category_outlined;
+    return Icons.local_offer_rounded;
   }
 
   static final NumberFormat _omrFormat = NumberFormat.currency(

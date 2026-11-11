@@ -424,7 +424,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   List<BmpfCategoryNode> _rawCategories = [];
   String _selectedHierarchyBankCode = 'ALL';
   bool _showPaidSpentHeatmap = false;
-  String _selectedTimePeriod = 'MONTH'; // 'DAY', 'WEEK', 'MONTH'
+  String _selectedTimePeriod = 'MONTH'; // 'WEEK', 'MONTH', 'ALL'
   List<Map<String, dynamic>> _userUploadedBanks = [];
   // Banks the user chose to connect in the bank setup step (drives which cards are shown)
   List<String> _selectedBankCodes = [];
@@ -1157,24 +1157,24 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     return latest ?? _referenceTxDate;
   }
 
-  /// Checks whether a transaction falls within the active time period ('DAY', 'WEEK', 'MONTH')
+  /// Checks whether a transaction falls within the active time period ('WEEK', 'MONTH', 'ALL')
   /// relative to its reference date (each bank's latest date when 'ALL' is selected so all available cards sum together,
   /// or the selected bank's latest date when a single card is selected).
   bool _matchesTimePeriod(BmpfTransaction tx, {String? forBankCode}) {
     final period = _selectedTimePeriod;
     final txDate = _parseTxDate(tx.postDate);
-    if (txDate == null) return period == 'MONTH';
+    if (txDate == null) return true;
 
     final isAll = (forBankCode ?? _selectedHierarchyBankCode).toUpperCase() == 'ALL';
     final refDate = isAll ? _referenceTxDateForBank(tx.bankCode) : _referenceTxDate;
 
-    if (period == 'DAY') {
-      return txDate.year == refDate.year &&
-          txDate.month == refDate.month &&
-          txDate.day == refDate.day;
-    } else if (period == 'WEEK') {
+    if (period == 'WEEK') {
       final diffDays = refDate.difference(txDate).inDays;
       return diffDays >= 0 && diffDays < 7;
+    } else if (period == 'MONTH') {
+      return txDate.year == refDate.year && txDate.month == refDate.month;
+    } else if (period == 'ALL') {
+      return true; // All transactions across all time
     } else {
       return txDate.year == refDate.year && txDate.month == refDate.month;
     }
@@ -3916,9 +3916,9 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   }
 
   Widget _buildMonthFilterBar() {
-    final AlignmentGeometry activeAlign = _selectedTimePeriod == 'DAY'
+    final AlignmentGeometry activeAlign = _selectedTimePeriod == 'WEEK'
         ? AlignmentDirectional.centerStart
-        : (_selectedTimePeriod == 'WEEK'
+        : (_selectedTimePeriod == 'MONTH'
             ? AlignmentDirectional.center
             : AlignmentDirectional.centerEnd);
 
@@ -3964,20 +3964,20 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                 ),
               ),
             ),
-            // Day / Week / Month Interactive Labels
+            // Week / Months / All Interactive Labels
             Row(
               children: [
-                _buildTimeSegmentItem(
-                  key: 'DAY',
-                  label: LanguageService.tr('Day', 'يوم'),
-                ),
                 _buildTimeSegmentItem(
                   key: 'WEEK',
                   label: LanguageService.tr('Week', 'أسبوع'),
                 ),
                 _buildTimeSegmentItem(
                   key: 'MONTH',
-                  label: LanguageService.tr('Month', 'شهر'),
+                  label: LanguageService.tr('Months', 'أشهر'),
+                ),
+                _buildTimeSegmentItem(
+                  key: 'ALL',
+                  label: LanguageService.tr('All', 'الكل'),
                 ),
               ],
             ),
@@ -4492,18 +4492,20 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   Widget _buildPaidSpentHeatmap() {
     final refDate = _referenceTxDate;
     final refDay = DateTime(refDate.year, refDate.month, refDate.day);
-    final isMonth = _selectedTimePeriod != 'DAY' && _selectedTimePeriod != 'WEEK';
+    final isWeek = _selectedTimePeriod == 'WEEK';
+    final isMonth = _selectedTimePeriod != 'WEEK';
 
     // Build the list of days covered by the heatmap.
     final List<DateTime> days = [];
-    if (isMonth) {
+    if (isWeek) {
+      for (int i = 6; i >= 0; i--) {
+        days.add(refDay.subtract(Duration(days: i)));
+      }
+    } else {
+      // 'MONTH' and 'ALL': cover days in reference month
       final daysInMonth = DateTime(refDay.year, refDay.month + 1, 0).day;
       for (int d = 1; d <= daysInMonth; d++) {
         days.add(DateTime(refDay.year, refDay.month, d));
-      }
-    } else {
-      for (int i = 6; i >= 0; i--) {
-        days.add(refDay.subtract(Duration(days: i)));
       }
     }
 

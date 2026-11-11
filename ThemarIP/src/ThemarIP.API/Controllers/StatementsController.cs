@@ -1090,12 +1090,19 @@ public class StatementsController : ControllerBase
     [HttpPost("intelligence-rules/evaluate")]
     public async Task<IActionResult> EvaluateIntelligenceRules(
         [FromBody] System.Text.Json.JsonElement? body,
+        [FromQuery] Guid? userId,
         [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
     {
         Guid? filterRuleId = null;
         if (body.HasValue && body.Value.TryGetProperty("ruleId", out var rIdElem))
         {
             if (Guid.TryParse(rIdElem.GetString(), out var parsedRId)) filterRuleId = parsedRId;
+        }
+
+        Guid? targetUserId = userId;
+        if (!targetUserId.HasValue && body.HasValue && body.Value.TryGetProperty("userId", out var uIdElem))
+        {
+            if (Guid.TryParse(uIdElem.GetString(), out var parsedUId)) targetUserId = parsedUId;
         }
 
         bool force = false;
@@ -1139,6 +1146,12 @@ public class StatementsController : ControllerBase
 
         var periodRows = new List<(string BudgetPeriodId, string UserId, string FullName, string Email, string Currency, long EffectiveTotal, long NormalSpent, long RemainingTotal, string PeriodStart, string PeriodEnd)>();
 
+        string userFilter = "";
+        if (targetUserId.HasValue && targetUserId.Value != Guid.Empty)
+        {
+            userFilter = $" AND lower(o.UserId) = '{targetUserId.Value.ToString().ToLowerInvariant()}'";
+        }
+
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = @"
@@ -1155,7 +1168,7 @@ public class StatementsController : ControllerBase
                     o.PeriodEnd
                 FROM vw_budget_period_overview o
                 LEFT JOIN Users u ON lower(u.Id) = lower(o.UserId)
-                WHERE o.Status = 'open' AND o.EffectiveTotalBudgetBaisa > 0;";
+                WHERE o.Status = 'open' AND o.EffectiveTotalBudgetBaisa > 0" + userFilter + ";";
 
             await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -1285,11 +1298,20 @@ public class StatementsController : ControllerBase
 
     [HttpGet("intelligence-rules/alerts")]
     public async Task<IActionResult> GetIntelligenceAlerts(
-        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
+        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context,
+        [FromQuery] Guid? userId = null)
     {
-        var alerts = await context.PfmIntelligenceAlerts
+        var query = context.PfmIntelligenceAlerts
             .Include(a => a.Rule)
             .Include(a => a.User)
+            .AsQueryable();
+
+        if (userId.HasValue && userId.Value != Guid.Empty)
+        {
+            query = query.Where(a => a.UserId == userId.Value);
+        }
+
+        var alerts = await query
             .OrderByDescending(a => a.TriggeredAt)
             .Take(50)
             .ToListAsync();
@@ -1311,6 +1333,40 @@ public class StatementsController : ControllerBase
         }).ToList();
 
         return Ok(result);
+    }
+
+    [HttpPost("intelligence-rules/alerts/{id}/read")]
+    public async Task<IActionResult> MarkAlertAsRead(
+        [FromRoute] Guid id,
+        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
+    {
+        var alert = await context.PfmIntelligenceAlerts.FindAsync(id);
+        if (alert == null) return NotFound(new { message = "Alert not found." });
+
+        alert.IsRead = true;
+        await context.SaveChangesAsync(default);
+        return Ok(new { success = true });
+    }
+
+    [HttpPost("intelligence-rules/alerts/mark-all-read")]
+    public async Task<IActionResult> MarkAllAlertsAsRead(
+        [FromQuery] Guid? userId,
+        [FromServices] ThemarIP.Infrastructure.Persistence.ApplicationDbContext context)
+    {
+        var query = context.PfmIntelligenceAlerts.Where(a => !a.IsRead);
+        if (userId.HasValue && userId.Value != Guid.Empty)
+        {
+            query = query.Where(a => a.UserId == userId.Value);
+        }
+
+        var unread = await query.ToListAsync();
+        foreach (var a in unread)
+        {
+            a.IsRead = true;
+        }
+
+        await context.SaveChangesAsync(default);
+        return Ok(new { success = true, markedCount = unread.Count });
     }
 
     [HttpGet("categories-hierarchy")]

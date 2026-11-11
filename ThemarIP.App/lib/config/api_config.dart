@@ -107,4 +107,6 @@ class ApiConfig {
   static const String currentSubscription = '/subscriptions/current';
   static const String setAccountNumber = '/auth/set-account-number';
   static const String fetchNboStatement = '/statements/fetch-nbo';
+  static const String intelligenceAlerts = '/statements/intelligence-rules/alerts';
+  static const String evaluateIntelligenceRules = '/statements/intelligence-rules/evaluate';
 }

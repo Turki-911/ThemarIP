@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import '../services/bank_setup_service.dart';
 import '../services/language_service.dart';
 import '../services/sms_service.dart';
+import '../services/alert_service.dart';
 import '../budgeting/main.dart';
 import '../budgeting/models/budget_models.dart';
 import '../budgeting/state/budget_controller.dart';
@@ -415,6 +416,13 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
   String _loadingMessage = '';
   bool _smsPaused = false;
 
+  // Intelligence Alerts / Push Notifications
+  List<IntelligenceAlert> _userAlerts = [];
+  int _unreadAlertsCount = 0;
+  IntelligenceAlert? _activeBannerAlert;
+  bool _hasShownInitialAlertBanner = false;
+  Timer? _alertsPollTimer;
+
   // 1. PDF State
   PlatformFile? _selectedPdfFile;
   BmpfParseResult? _pdfParseResult;
@@ -462,6 +470,9 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       await Future.delayed(const Duration(milliseconds: 600));
       if (mounted) SmsService.start(context);
     });
+    _alertsPollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _loadAlerts(silent: true);
+    });
   }
 
   Future<void> _initScreenData() async {
@@ -501,6 +512,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
 
   @override
   void dispose() {
+    _alertsPollTimer?.cancel();
     _bankSearchController.dispose();
     _budgetController.dispose();
     super.dispose();
@@ -511,6 +523,7 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
     if (mounted) {
       setState(() => _currentUser = user);
       _fetchLiveDbCount();
+      _loadAlerts();
     }
     if (user != null && user.email.isNotEmpty) {
       final status = await _apiService.getUserStatus(
@@ -1378,6 +1391,17 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
                   child: _buildCurrentPage(),
                 ),
 
+                // Top Floating In-App Push Notification Banner
+                if (_activeBannerAlert != null)
+                  Positioned(
+                    top: 12,
+                    left: 16,
+                    right: 16,
+                    child: SafeArea(
+                      child: _buildInAppNotificationBanner(),
+                    ),
+                  ),
+
                 // Floating Bottom Navigation Bar (Centered & Compact like Image 2)
                 Positioned(
                   left: 0,
@@ -1396,6 +1420,455 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _loadAlerts({bool silent = false}) async {
+    final user = _currentUser ?? await AuthService.getUser();
+    if (user == null || user.id.isEmpty) return;
+
+    if (!silent) {
+      unawaited(AlertService.triggerEvaluation(user.id));
+    }
+
+    final alerts = await AlertService.fetchAlerts(user.id);
+    if (!mounted) return;
+
+    final unread = alerts.where((a) => !a.isRead).toList();
+    setState(() {
+      _userAlerts = alerts;
+      _unreadAlertsCount = unread.length;
+      if (unread.isNotEmpty && !_hasShownInitialAlertBanner) {
+        _activeBannerAlert = unread.first;
+        _hasShownInitialAlertBanner = true;
+        AlertService.notifyPlatform('ThemarIP Budget Alert', _activeBannerAlert!.message);
+      }
+    });
+  }
+
+  Future<void> _markAlertAsRead(IntelligenceAlert alert) async {
+    await AlertService.markAsRead(alert.id);
+    if (!mounted) return;
+    setState(() {
+      final idx = _userAlerts.indexWhere((a) => a.id == alert.id);
+      if (idx != -1) {
+        _userAlerts[idx] = IntelligenceAlert(
+          id: alert.id,
+          ruleId: alert.ruleId,
+          ruleName: alert.ruleName,
+          ruleType: alert.ruleType,
+          userId: alert.userId,
+          userName: alert.userName,
+          message: alert.message,
+          channel: alert.channel,
+          deliveryStatus: alert.deliveryStatus,
+          isRead: true,
+          triggeredAt: alert.triggeredAt,
+        );
+      }
+      _unreadAlertsCount = _userAlerts.where((a) => !a.isRead).length;
+      if (_activeBannerAlert?.id == alert.id) {
+        _activeBannerAlert = null;
+      }
+    });
+  }
+
+  Future<void> _markAllAlertsAsRead() async {
+    final user = _currentUser;
+    if (user == null) return;
+    await AlertService.markAllAsRead(user.id);
+    if (!mounted) return;
+    setState(() {
+      _userAlerts = _userAlerts.map((a) => IntelligenceAlert(
+        id: a.id,
+        ruleId: a.ruleId,
+        ruleName: a.ruleName,
+        ruleType: a.ruleType,
+        userId: a.userId,
+        userName: a.userName,
+        message: a.message,
+        channel: a.channel,
+        deliveryStatus: a.deliveryStatus,
+        isRead: true,
+        triggeredAt: a.triggeredAt,
+      )).toList();
+      _unreadAlertsCount = 0;
+      _activeBannerAlert = null;
+    });
+  }
+
+  void _showNotificationsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF7C3AED), size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              LanguageService.isArabic ? 'الإشعارات' : 'Notifications',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            ),
+                            if (_unreadAlertsCount > 0) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '$_unreadAlertsCount',
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (_unreadAlertsCount > 0)
+                          TextButton(
+                            onPressed: () async {
+                              await _markAllAlertsAsRead();
+                              setSheetState(() {});
+                            },
+                            child: Text(
+                              LanguageService.isArabic ? 'تعيين الكل كمقروء' : 'Mark all read',
+                              style: const TextStyle(color: Color(0xFF7C3AED), fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  Expanded(
+                    child: _userAlerts.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF1F5F9),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.notifications_off_outlined, size: 36, color: Color(0xFF94A3B8)),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  LanguageService.isArabic ? 'لا توجد إشعارات حالياً' : 'All caught up!',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  LanguageService.isArabic
+                                      ? 'ستظهر هنا تنبيهات الميزانية والرؤى المالية الذكية.'
+                                      : 'Budget alerts and financial intelligence will appear here.',
+                                  style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _userAlerts.length,
+                            separatorBuilder: (_, _) => const SizedBox(height: 10),
+                            itemBuilder: (ctx, idx) {
+                              final alert = _userAlerts[idx];
+                              final isWarning = alert.message.contains('80%') || alert.message.toLowerCase().contains('warning');
+                              return InkWell(
+                                onTap: () async {
+                                  if (!alert.isRead) {
+                                    await _markAlertAsRead(alert);
+                                    setSheetState(() {});
+                                  }
+                                  if (ctx.mounted) {
+                                    Navigator.pop(ctx);
+                                  }
+                                  if (mounted) {
+                                    setState(() => _selectedPageIndex = 3);
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(14),
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: alert.isRead ? Colors.white : const Color(0xFFFAF5FF),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: alert.isRead
+                                          ? const Color(0xFFE2E8F0)
+                                          : const Color(0xFFDDD6FE),
+                                      width: alert.isRead ? 1 : 1.5,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: isWarning
+                                              ? const Color(0xFFFEF3C7)
+                                              : const Color(0xFFEDE9FE),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          isWarning ? Icons.warning_amber_rounded : Icons.pie_chart_rounded,
+                                          color: isWarning ? const Color(0xFFD97706) : const Color(0xFF7C3AED),
+                                          size: 18,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    alert.ruleName,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: alert.isRead ? FontWeight.w600 : FontWeight.bold,
+                                                      color: const Color(0xFF0F172A),
+                                                    ),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  alert.timeAgo,
+                                                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 5),
+                                            Text(
+                                              alert.message,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: alert.isRead ? const Color(0xFF64748B) : const Color(0xFF1E293B),
+                                                height: 1.35,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFEDE9FE),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.bolt, size: 11, color: Color(0xFF7C3AED)),
+                                                      SizedBox(width: 3),
+                                                      Text(
+                                                        'Push Notification',
+                                                        style: TextStyle(fontSize: 10, color: Color(0xFF7C3AED), fontWeight: FontWeight.w600),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const Spacer(),
+                                                if (!alert.isRead)
+                                                  Container(
+                                                    width: 7,
+                                                    height: 7,
+                                                    decoration: const BoxDecoration(
+                                                      color: Color(0xFF7C3AED),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildInAppNotificationBanner() {
+    final alert = _activeBannerAlert;
+    if (alert == null) return const SizedBox.shrink();
+
+    final isWarning = alert.message.contains('80%') || alert.message.toLowerCase().contains('warning');
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: (isWarning ? const Color(0xFFF59E0B) : const Color(0xFF7C3AED)).withValues(alpha: 0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(
+          color: isWarning ? const Color(0xFFF59E0B) : const Color(0xFF7C3AED),
+          width: 1.2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            _markAlertAsRead(alert);
+            _showNotificationsSheet();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (isWarning ? const Color(0xFFF59E0B) : const Color(0xFF7C3AED)).withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isWarning ? Icons.warning_rounded : Icons.notifications_active_rounded,
+                    color: isWarning ? const Color(0xFFFBBF24) : const Color(0xFFA78BFA),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            alert.ruleName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEF4444),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'NEW',
+                              style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        alert.message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFCBD5E1),
+                          fontSize: 12,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    _markAlertAsRead(alert);
+                    setState(() => _selectedPageIndex = 3);
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C3AED),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text(
+                    LanguageService.isArabic ? 'عرض' : 'View',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Color(0xFF94A3B8), size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  splashRadius: 16,
+                  onPressed: () {
+                    setState(() => _activeBannerAlert = null);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1440,6 +1913,53 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
       ),
       actions: [
         if (_currentUser != null) ...[
+          // Notification Bell with Unread Badge
+          IconButton(
+            tooltip: LanguageService.isArabic ? 'الإشعارات' : 'Notifications',
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(
+                  Icons.notifications_outlined,
+                  color: Color(0xFF0F172A),
+                  size: 24,
+                ),
+                if (_unreadAlertsCount > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        _unreadAlertsCount > 9 ? '9+' : '$_unreadAlertsCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          height: 1.1,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: _showNotificationsSheet,
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: Chip(

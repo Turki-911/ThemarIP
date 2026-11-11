@@ -1841,6 +1841,10 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
             setState(() => _selectedPageIndex = 0);
           },
           onBudgetStarted: (ctrl) async {
+            // Optimistically activate budget locally so entered budget is never lost
+            ctrl.markBudgetStarted();
+            setState(() {});
+
             try {
               final result = await _apiService.saveBudgetSetup(
                 userId: _currentUser?.id,
@@ -1851,27 +1855,50 @@ class _BmpfMainScreenState extends State<BmpfMainScreen> {
               );
               if (result.isNotEmpty && result['hasConfiguredBudget'] == true) {
                 ctrl.applyServerOverview(result);
-              } else {
-                ctrl.markBudgetStarted();
               }
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Budget saved successfully to database'),
-                    backgroundColor: Color(0xFF10B981),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: Text(
+                      LanguageService.tr(
+                        'Budget saved successfully to database',
+                        'تم حفظ الميزانية بنجاح في قاعدة البيانات',
+                      ),
+                    ),
+                    backgroundColor: const Color(0xFF10B981),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
                 setState(() {});
               }
             } catch (e) {
+              final errorStr = e.toString().toLowerCase();
+              final isNetworkError = errorStr.contains('socketexception') ||
+                  errorStr.contains('failed host lookup') ||
+                  errorStr.contains('connection error') ||
+                  errorStr.contains('nodename') ||
+                  errorStr.contains('network is unreachable') ||
+                  errorStr.contains('timed out');
+
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Error saving budget: $e'),
-                    backgroundColor: const Color(0xFFEF4444),
+                    content: Text(
+                      isNetworkError
+                          ? LanguageService.tr(
+                              'Budget saved locally. Server offline or unreachable (No internet). Changes will sync automatically.',
+                              'تم حفظ الميزانية محلياً. لا يوجد اتصال بالإنترنت، ستتم المزامنة تلقائياً.',
+                            )
+                          : LanguageService.tr(
+                              'Budget saved locally. Server sync pending.',
+                              'تم حفظ الميزانية محلياً. في انتظار المزامنة مع الخادم.',
+                            ),
+                    ),
+                    backgroundColor: const Color(0xFFF59E0B),
+                    duration: const Duration(seconds: 4),
                   ),
                 );
+                setState(() {});
               }
             }
           },
